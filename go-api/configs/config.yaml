@@ -1,0 +1,60 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "debug"
+  read_timeout: "30s"
+  write_timeout: "30s"
+
+database:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: ""  # 从环境变量获取
+  dbname: "ai_agent"
+  sslmode: "disable"
+  max_open_conns: 100
+  max_idle_conns: 10
+  conn_max_lifetime: "3600s"
+  conn_max_idle_time: "600s"
+
+redis:
+  addr: "localhost:6379"
+  password: ""  # 从环境变量获取
+  db: 0
+  pool_size: 100
+  min_idle_conns: 10
+  dial_timeout: "5s"
+  read_timeout: "3s"
+  write_timeout: "3s"
+
+ai:
+  base_url: "http://localhost:8000"
+  timeout: "30s"
+  retry_attempts: 3
+  default_model: "gpt-3.5-turbo"
+  max_tokens: 4096
+  temperature_limit: 2.0
+
+jwt:
+  secret: ""  # 从环境变量获取
+  expire_hours: 24
+  refresh_hours: 168
+  issuer: "ai-agent"
+
+plugin:
+  registry_url: "http://localhost:8080/api/v1/plugins"
+  sandbox_enabled: true
+  cpu_limit: "100m"
+  memory_limit: "128Mi"
+  timeout: "30s"
+  max_concurrent: 10
+
+log:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  file_path: "./logs/app.log"
+  max_size: 100
+  max_backups: 10
+  max_age: 30
+  compress: true
