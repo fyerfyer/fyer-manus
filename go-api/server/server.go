@@ -11,7 +11,7 @@ import (
 
 	"github.com/fyerfyer/fyer-manus/go-api/internal/config"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/logger"
-	"github.com/fyerfyer/fyer-manus/go-api/router"
+	"github.com/fyerfyer/fyer-manus/go-api/internal/router"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )

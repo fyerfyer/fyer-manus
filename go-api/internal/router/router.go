@@ -2,7 +2,7 @@ package router
 
 import (
 	"github.com/fyerfyer/fyer-manus/go-api/internal/config"
-	"github.com/fyerfyer/fyer-manus/go-api/middleware"
+	"github.com/fyerfyer/fyer-manus/go-api/internal/middleware"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,6 +19,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 
 	// 注册路由
 	registerHealtRoutes(router)
+	registerAuthRoutes(router)
 
 	return router
 }

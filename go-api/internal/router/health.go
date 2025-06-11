@@ -1,7 +1,7 @@
 package router
 
 import (
-	"github.com/fyerfyer/fyer-manus/go-api/handler"
+	"github.com/fyerfyer/fyer-manus/go-api/internal/handler"
 	"github.com/gin-gonic/gin"
 )
 
