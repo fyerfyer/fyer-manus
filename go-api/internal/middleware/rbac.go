@@ -12,10 +12,11 @@ import (
 
 // RequirePermission 需要指定权限的中间件
 func RequirePermission(permission string) gin.HandlerFunc {
-	authService := service.NewAuthService()
-	validator := authService.GetValidator()
-
 	return func(c *gin.Context) {
+		// 在请求开始前才加载相关配置
+		authService := service.NewAuthService()
+		validator := authService.GetValidator()
+
 		claims, ok := GetCurrentUser(c)
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{

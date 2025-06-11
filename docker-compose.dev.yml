@@ -105,6 +105,41 @@ services:
       - fyer-manus-network
     profiles:
       - tools
+      
+  # Prometheus 监控
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: fyer-manus-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - fyer-manus-network
+    profiles:
+      - monitoring
+
+  # Grafana 可视化
+  grafana:
+    image: grafana/grafana:latest
+    container_name: fyer-manus-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - fyer-manus-network
+    profiles:
+      - monitoring
 
 volumes:
   postgres_data:
@@ -112,6 +147,10 @@ volumes:
   redis_data:
     driver: local
   pgadmin_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
     driver: local
 
 networks:

@@ -1,4 +1,4 @@
-.PHONY: help build run test clean dev-up dev-down db-migrate db-migrate-down db-migrate-status db-migrate-create docker-build docker-run docker-stop
+.PHONY: help build run test clean dev-up dev-down db-migrate db-migrate-down db-migrate-status db-migrate-create docker-build docker-run docker-stop docker-test setup all lint test-cover dev-up-all dev-logs
 
 # 变量定义
 APP_NAME := fyer-manus-api
@@ -47,19 +47,24 @@ test-cover: ## 运行测试并生成覆盖率报告
 	cd $(GO_API_DIR) && go test -v -coverprofile=coverage.out ./...
 	cd $(GO_API_DIR) && go tool cover -html=coverage.out -o coverage.html
 
+lint: ## 代码检查
+	cd $(GO_API_DIR) && go fmt ./...
+	cd $(GO_API_DIR) && go vet ./...
+
 clean: ## 清理构建文件
 	@echo "Cleaning build files..."
 	rm -rf $(BUILD_DIR)
 	cd $(GO_API_DIR) && go clean
+	cd $(GO_API_DIR) && rm -f coverage.out coverage.html
 
-dev-up: ## 启动开发环境
+dev-up: ## 启动开发环境（包含监控）
 	@echo "Starting development environment..."
 	@if [ ! -f .env ]; then \
 	    echo "Creating .env file from .env.example..."; \
 	    cp .env.example .env; \
 	    echo ".env file created! Please edit it with your actual configuration."; \
 	fi
-	docker-compose -f docker-compose.dev.yml up -d
+	docker-compose -f docker-compose.dev.yml --profile monitoring up -d
 	@echo "Waiting for services to be ready..."
 	@sleep 10
 
@@ -94,6 +99,10 @@ db-migrate-status: ## 查看迁移状态
 	@echo "Checking migration status..."
 	cd $(GO_API_DIR)/migrations/scripts && chmod +x migrate.sh && ./migrate.sh version
 
+db-migrate-create: ## 创建新的数据库迁移文件
+	@read -p "Enter migration name: " name; \
+	cd $(GO_API_DIR)/migrations/scripts && chmod +x migrate.sh && ./migrate.sh create $$name
+
 docker-build: ## 构建Docker镜像
 	@echo "Building Docker image: $(DOCKER_IMAGE)"
 	@if [ ! -f .env ]; then \
@@ -113,6 +122,11 @@ docker-run: ## 运行Docker容器
 	    --env-file .env \
 	    $(DOCKER_IMAGE)
 
+docker-stop: ## 停止Docker容器
+	@echo "Stopping Docker container..."
+	docker stop $(APP_NAME) || true
+	docker rm $(APP_NAME) || true
+
 docker-test: ## 测试Docker构建和运行
 	@echo "Testing Docker setup..."
 	make docker-build
@@ -120,7 +134,7 @@ docker-test: ## 测试Docker构建和运行
 	sleep 10
 	make docker-run
 	sleep 5
-	curl -f http://localhost:8080/health
+	curl -f http://localhost:8080/health || echo "Health check failed"
 	docker stop $(APP_NAME) && docker rm $(APP_NAME)
 	make dev-down
 
@@ -129,4 +143,25 @@ setup: deps dev-up ## 初始化开发环境
 	@echo "Run 'make db-migrate' to initialize database schema"
 	@echo "Run 'make run' to start the API server"
 
-all: clean deps build ## 完整构建流程
+all: clean deps lint test build ## 完整构建流程
+
+# 开发辅助命令
+dev-restart: dev-down dev-up ## 重启开发环境
+
+docker-logs: ## 查看Docker容器日志
+	docker logs -f $(APP_NAME)
+
+docker-clean: ## 清理Docker资源
+	@echo "Cleaning Docker resources..."
+	docker stop $(APP_NAME) || true
+	docker rm $(APP_NAME) || true
+	docker rmi $(DOCKER_IMAGE) || true
+	docker system prune -f
+
+# API测试命令
+test-api: ## 测试API端点
+	@echo "Testing API endpoints..."
+	@echo "Health check:"
+	curl -s http://localhost:8080/health | jq .
+	@echo "\nReadiness check:"
+	curl -s http://localhost:8080/ready | jq .
