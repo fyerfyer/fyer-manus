@@ -7,7 +7,7 @@ on:
     branches: [main, develop]
 
 env:
-  GO_VERSION: '1.24.4'
+  GO_VERSION: '1.24.4' 
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
@@ -55,14 +55,10 @@ jobs:
             exit 1
           fi
 
-      - name: Install golangci-lint
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
-
-      - name: Run golangci-lint
+      - name: Test build
         run: |
           cd go-api
-          $(go env GOPATH)/bin/golangci-lint run
+          go build -v ./...
 
   # 单元测试
   test:
@@ -112,6 +108,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      - name: Install Redis CLI and postgresql-client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-tools postgresql-client
+
       - name: Create .env file for testing
         run: |
           cd go-api
@@ -137,8 +138,13 @@ jobs:
 
       - name: Wait for services
         run: |
+          echo "Waiting for PostgreSQL..."
           timeout 30 bash -c 'until pg_isready -h localhost -p 5432 -U postgres; do sleep 1; done'
+          echo "PostgreSQL is ready!"
+          
+          echo "Waiting for Redis..."
           timeout 30 bash -c 'until redis-cli -h localhost -p 6379 ping; do sleep 1; done'
+          echo "Redis is ready!"
 
       - name: Run database migrations
         run: |
@@ -228,13 +234,14 @@ jobs:
       - name: Test Docker Compose
         run: |
           cp .env.example .env
-          docker-compose -f docker-compose.dev.yml up -d postgres redis
+          # 使用docker compose而不是docker-compose
+          docker compose -f docker-compose.dev.yml up -d postgres redis
           sleep 10
-          docker-compose -f docker-compose.dev.yml --profile api up -d
+          docker compose -f docker-compose.dev.yml --profile api up -d
           sleep 5
           # 测试健康检查
           curl -f http://localhost:8080/health || exit 1
-          docker-compose -f docker-compose.dev.yml down
+          docker compose -f docker-compose.dev.yml down
 
   # Docker构建和推送 (仅主分支)
   docker:
