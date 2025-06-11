@@ -20,6 +20,8 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// 注册路由
 	registerHealtRoutes(router)
 	registerAuthRoutes(router)
+	registerUserRoutes(router)
+	registerSessionRoutes(router)
 
 	return router
 }
