@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/fyerfyer/fyer-manus/go-api/internal/database"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/model"
@@ -209,28 +210,41 @@ func (r *messageRepository) Search(ctx context.Context, params types.MessageSear
 
 	query := r.db.WithContext(ctx).Model(&model.Message{})
 
+	fmt.Printf("Search: Initial params - SessionID: '%s', Role: '%s', Query: '%s'\n",
+		params.SessionID, params.Role, params.Query)
+
 	// 会话过滤
 	if params.SessionID != "" {
+		fmt.Printf("Search: Attempting to parse SessionID: '%s'\n", params.SessionID)
 		if sessionID, err := uuid.Parse(params.SessionID); err == nil {
+			fmt.Printf("Search: Successfully parsed SessionID: %s, applying filter\n", sessionID)
 			query = query.Where("session_id = ?", sessionID)
+		} else {
+			fmt.Printf("Search: Failed to parse SessionID '%s', error: %v, skipping filter\n",
+				params.SessionID, err)
+			return []*model.Message{}, 0, nil
 		}
 	}
 
 	// 角色过滤
 	if params.Role != "" {
+		fmt.Printf("Search: Applying role filter: %s\n", params.Role)
 		query = query.Where("role = ?", params.Role)
 	}
 
 	// 搜索过滤
 	if params.Query != "" {
+		fmt.Printf("Search: Applying content search filter: %s\n", params.Query)
 		query = query.Where("content ILIKE ?", "%"+params.Query+"%")
 	}
 
 	// 计算总数
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
+		fmt.Printf("Search: Error counting messages: %v\n", err)
 		return nil, 0, err
 	}
+	fmt.Printf("Search: Found %d total messages\n", total)
 
 	// 分页查询
 	var messages []*model.Message
@@ -239,6 +253,7 @@ func (r *messageRepository) Search(ctx context.Context, params types.MessageSear
 		Limit(params.PageSize).
 		Find(&messages).Error
 
+	fmt.Printf("Search: Retrieved %d messages\n", len(messages))
 	return messages, total, err
 }
 

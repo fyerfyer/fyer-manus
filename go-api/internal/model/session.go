@@ -1,6 +1,9 @@
 package model
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/fyerfyer/fyer-manus/go-api/internal/types"
@@ -8,19 +11,55 @@ import (
 	"gorm.io/gorm"
 )
 
+// JSONMap 自定义类型处理JSONB字段
+type JSONMap map[string]interface{}
+
+// Value 实现driver.Valuer接口
+func (j JSONMap) Value() (driver.Value, error) {
+	if j == nil {
+		return nil, nil
+	}
+	return json.Marshal(j)
+}
+
+// Scan 实现sql.Scanner接口
+func (j *JSONMap) Scan(value interface{}) error {
+	if value == nil {
+		*j = make(map[string]interface{})
+		return nil
+	}
+
+	var bytes []byte
+	switch v := value.(type) {
+	case []byte:
+		bytes = v
+	case string:
+		bytes = []byte(v)
+	default:
+		return errors.New("cannot scan into JSONMap")
+	}
+
+	if len(bytes) == 0 {
+		*j = make(map[string]interface{})
+		return nil
+	}
+
+	return json.Unmarshal(bytes, j)
+}
+
 // Session 会话模型
 type Session struct {
-	ID           uuid.UUID              `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	UserID       uuid.UUID              `gorm:"type:uuid;not null;index" json:"user_id"`
-	Title        string                 `gorm:"size:255;default:'New Chat'" json:"title"`
-	Status       types.SessionStatus    `gorm:"size:20;default:'active';index" json:"status"`
-	ModelName    string                 `gorm:"size:100" json:"model_name"`
-	SystemPrompt string                 `gorm:"type:text" json:"system_prompt"`
-	Metadata     map[string]interface{} `gorm:"type:jsonb;default:'{}'" json:"metadata"`
-	MessageCount int                    `gorm:"default:0" json:"message_count"`
-	TotalTokens  int                    `gorm:"default:0" json:"total_tokens"`
-	CreatedAt    time.Time              `gorm:"index" json:"created_at"`
-	UpdatedAt    time.Time              `gorm:"index" json:"updated_at"`
+	ID           uuid.UUID           `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	UserID       uuid.UUID           `gorm:"type:uuid;not null;index" json:"user_id"`
+	Title        string              `gorm:"size:255;default:'New Chat'" json:"title"`
+	Status       types.SessionStatus `gorm:"size:20;default:'active';index" json:"status"`
+	ModelName    string              `gorm:"size:100" json:"model_name"`
+	SystemPrompt string              `gorm:"type:text" json:"system_prompt"`
+	Metadata     JSONMap             `gorm:"type:jsonb;default:'{}'" json:"metadata"`
+	MessageCount int                 `gorm:"default:0" json:"message_count"`
+	TotalTokens  int                 `gorm:"default:0" json:"total_tokens"`
+	CreatedAt    time.Time           `gorm:"index" json:"created_at"`
+	UpdatedAt    time.Time           `gorm:"index" json:"updated_at"`
 
 	// 关联
 	User     User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
@@ -109,7 +148,7 @@ func (s *Session) ToResponse() SessionResponse {
 		Status:       s.Status,
 		ModelName:    s.ModelName,
 		SystemPrompt: s.SystemPrompt,
-		Metadata:     s.Metadata,
+		Metadata:     map[string]interface{}(s.Metadata),
 		MessageCount: s.MessageCount,
 		TotalTokens:  s.TotalTokens,
 		CreatedAt:    s.CreatedAt,

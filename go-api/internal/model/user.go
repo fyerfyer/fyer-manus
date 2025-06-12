@@ -20,8 +20,8 @@ const (
 // User 用户模型
 type User struct {
 	ID            uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	Username      string     `gorm:"uniqueIndex;size:50;not null" json:"username"`
-	Email         string     `gorm:"uniqueIndex;size:255;not null" json:"email"`
+	Username      string     `gorm:"size:50;not null;uniqueIndex:users_username_key" json:"username"`
+	Email         string     `gorm:"size:255;not null;uniqueIndex:users_email_key" json:"email"`
 	PasswordHash  string     `gorm:"size:255;not null" json:"-"`
 	FullName      string     `gorm:"size:100" json:"full_name"`
 	AvatarURL     string     `gorm:"size:500" json:"avatar_url"`

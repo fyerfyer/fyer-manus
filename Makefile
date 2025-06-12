@@ -81,7 +81,7 @@ dev-up-all: ## 启动包含API的完整开发环境
 
 dev-down: ## 停止开发环境
 	@echo "Stopping development environment..."
-	docker-compose -f docker-compose.dev.yml down
+	docker-compose -f docker-compose.dev.yml --profile monitoring --profile api --profile tools down
 
 dev-logs: ## 查看开发环境日志
 	docker-compose -f docker-compose.dev.yml logs -f

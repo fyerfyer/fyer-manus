@@ -12,7 +12,7 @@ type Role struct {
 	ID          uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
 	Name        string    `gorm:"uniqueIndex;size:50;not null" json:"name"`
 	Description string    `gorm:"type:text" json:"description"`
-	Permissions []string  `gorm:"type:jsonb;default:'[]'" json:"permissions"`
+	Permissions []string  `gorm:"type:jsonb;serializer:json" json:"permissions"` // 添加 serializer:json
 	IsSystem    bool      `gorm:"default:false" json:"is_system"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`

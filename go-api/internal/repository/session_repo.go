@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/fyerfyer/fyer-manus/go-api/internal/database"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/model"
@@ -129,6 +131,8 @@ func (r *sessionRepository) Search(ctx context.Context, params types.SessionSear
 	if params.UserID != "" {
 		if userID, err := uuid.Parse(params.UserID); err == nil {
 			query = query.Where("user_id = ?", userID)
+		} else {
+			return []*model.Session{}, 0, fmt.Errorf("invalid user ID: %s", params.UserID)
 		}
 	}
 
@@ -170,16 +174,32 @@ func (r *sessionRepository) GetActiveSessionsCount(ctx context.Context, userID u
 
 // CleanupExpiredSessions 清理过期会话
 func (r *sessionRepository) CleanupExpiredSessions(ctx context.Context) error {
-	// 清理超过30天未更新的归档会话
-	result := r.db.WithContext(ctx).
+	// 清理超过30天未更新的归档会话，标记为已删除而不是物理删除
+	cutoffTime := time.Now().AddDate(0, 0, -30)
+
+	// 首先查询要删除的会话数量
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.Session{}).
+		Where("status = ? AND updated_at < ?", types.SessionStatusArchived, cutoffTime).
+		Count(&count).Error
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("CleanupExpiredSessions: Found %d expired sessions to delete (cutoff: %v)\n", count, cutoffTime)
+
+	// 执行软删除：更新状态为已删除
+	result := r.db.WithContext(ctx).Model(&model.Session{}).
 		Where("status = ? AND updated_at < ?",
-			types.SessionStatusArchived,
-			gorm.Expr("NOW() - INTERVAL '30 days'")).
-		Delete(&model.Session{})
+								types.SessionStatusArchived,
+								cutoffTime).
+		Update("status", types.SessionStatusDeleted) // 改为软删除
 
 	if result.Error != nil {
+		fmt.Printf("CleanupExpiredSessions: Delete failed with error: %v\n", result.Error)
 		return result.Error
 	}
 
+	fmt.Printf("CleanupExpiredSessions: Successfully deleted %d sessions\n", result.RowsAffected)
 	return nil
 }

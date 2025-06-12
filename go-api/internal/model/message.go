@@ -17,9 +17,9 @@ type Message struct {
 	Content     string                 `gorm:"type:text;not null" json:"content"`
 	ContentType types.MessageType      `gorm:"size:50;default:'text'" json:"content_type"`
 	ModelName   string                 `gorm:"size:100" json:"model_name"`
-	ToolCalls   []ToolCall             `gorm:"type:jsonb" json:"tool_calls,omitempty"`
+	ToolCalls   []ToolCall             `gorm:"type:jsonb;serializer:json" json:"tool_calls,omitempty"`
 	ToolCallID  string                 `gorm:"size:100" json:"tool_call_id,omitempty"`
-	Metadata    map[string]interface{} `gorm:"type:jsonb;default:'{}'" json:"metadata"`
+	Metadata    map[string]interface{} `gorm:"type:jsonb;serializer:json;default:'{}'" json:"metadata"`
 	TokensUsed  int                    `gorm:"default:0" json:"tokens_used"`
 	Cost        float64                `gorm:"type:decimal(10,6);default:0.00" json:"cost"`
 	CreatedAt   time.Time              `gorm:"index" json:"created_at"`

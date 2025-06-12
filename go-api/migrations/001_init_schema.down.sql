@@ -1,3 +1,9 @@
+-- 删除约束
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_username_not_empty;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_not_empty;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_password_hash_not_empty;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_format;
+
 -- 删除触发器
 DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 DROP TRIGGER IF EXISTS update_roles_updated_at ON roles;

@@ -308,3 +308,9 @@ INSERT INTO system_configs (key, value, description, is_public) VALUES
 ('ai.default_model', '"gpt-3.5-turbo"', 'Default AI model', false),
 ('ai.max_tokens_per_request', '4096', 'Maximum tokens per request', false)
 ON CONFLICT (key) DO NOTHING;
+
+-- 添加更严格的约束
+ALTER TABLE users ADD CONSTRAINT users_username_not_empty CHECK (length(trim(username)) > 0);
+ALTER TABLE users ADD CONSTRAINT users_email_not_empty CHECK (length(trim(email)) > 0);
+ALTER TABLE users ADD CONSTRAINT users_password_hash_not_empty CHECK (length(trim(password_hash)) > 0);
+ALTER TABLE users ADD CONSTRAINT users_email_format CHECK (email ~* '^[A-Za-z0-9._%-]+@[A-Za-z0-9.-]+[.][A-Za-z]+$');

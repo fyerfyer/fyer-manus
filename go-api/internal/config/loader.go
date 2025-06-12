@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
@@ -62,6 +63,90 @@ func Load() (*Config, error) {
 
 	globalConfig = &config
 	return &config, nil
+}
+
+// LoadForTest 为测试加载配置，使用测试默认值
+func LoadForTest() (*Config, error) {
+	config := &Config{
+		Server: ServerConfig{
+			Host:         "localhost",
+			Port:         8080,
+			Mode:         "test",
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 30 * time.Second,
+		},
+		Database: DatabaseConfig{
+			Host:            "localhost",
+			Port:            5432,
+			User:            "postgres",
+			Password:        "password",
+			DBName:          "ai_agent", // 修改为与docker-compose一致
+			SSLMode:         "disable",
+			MaxOpenConns:    10,
+			MaxIdleConns:    5,
+			ConnMaxLifetime: time.Hour,
+			ConnMaxIdleTime: 10 * time.Minute,
+		},
+		Redis: RedisConfig{
+			Addr:         "localhost:6379",
+			Password:     "",
+			DB:           0, // 修改为与docker-compose一致
+			PoolSize:     10,
+			MinIdleConns: 5,
+			DialTimeout:  5 * time.Second,
+			ReadTimeout:  3 * time.Second,
+			WriteTimeout: 3 * time.Second,
+		},
+		JWT: JWTConfig{
+			Secret:       "test-jwt-secret-key-for-testing-only-32-chars-minimum",
+			ExpireHours:  24,
+			RefreshHours: 168,
+			Issuer:       "ai-agent-test",
+		},
+		AI: AIConfig{
+			BaseURL:          "http://localhost:8000",
+			Timeout:          30 * time.Second,
+			RetryAttempts:    3,
+			DefaultModel:     "gpt-3.5-turbo",
+			MaxTokens:        4096,
+			TemperatureLimit: 2.0,
+		},
+		Plugin: PluginConfig{
+			RegistryURL:    "http://localhost:8080/api/v1/plugins",
+			SandboxEnabled: true,
+			CPULimit:       "100m",
+			MemoryLimit:    "128Mi",
+			Timeout:        30 * time.Second,
+			MaxConcurrent:  10,
+		},
+		Log: LogConfig{
+			Level:      "debug",
+			Format:     "console",
+			Output:     "stdout",
+			FilePath:   "./logs/test.log",
+			MaxSize:    100,
+			MaxBackups: 10,
+			MaxAge:     30,
+			Compress:   true,
+		},
+	}
+
+	// 尝试从环境变量覆盖一些配置
+	if redisAddr := os.Getenv("REDIS_ADDR"); redisAddr != "" {
+		config.Redis.Addr = redisAddr
+	}
+	if dbHost := os.Getenv("DB_HOST"); dbHost != "" {
+		config.Database.Host = dbHost
+	}
+	if dbPassword := os.Getenv("DB_PASSWORD"); dbPassword != "" {
+		config.Database.Password = dbPassword
+	}
+	if jwtSecret := os.Getenv("JWT_SECRET"); jwtSecret != "" {
+		config.JWT.Secret = jwtSecret
+	}
+
+	globalConfig = config
+	return config, nil
 }
 
 // loadEnvFile 加载.env文件

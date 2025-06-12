@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"strings"
 
 	"github.com/fyerfyer/fyer-manus/go-api/internal/database"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/model"
@@ -41,8 +43,35 @@ func NewUserRepository() UserRepository {
 	}
 }
 
+// validateUser 验证用户数据
+func (r *userRepository) validateUser(user *model.User) error {
+	if strings.TrimSpace(user.Username) == "" {
+		return errors.New("username cannot be empty")
+	}
+
+	if strings.TrimSpace(user.Email) == "" {
+		return errors.New("email cannot be empty")
+	}
+
+	if strings.TrimSpace(user.PasswordHash) == "" {
+		return errors.New("password cannot be empty")
+	}
+
+	// 简单的邮箱格式验证
+	if !strings.Contains(user.Email, "@") || !strings.Contains(user.Email, ".") {
+		return errors.New("invalid email format")
+	}
+
+	return nil
+}
+
 // Create 创建用户
 func (r *userRepository) Create(ctx context.Context, user *model.User) error {
+	// 验证用户数据
+	if err := r.validateUser(user); err != nil {
+		return err
+	}
+
 	return r.db.WithContext(ctx).Create(user).Error
 }
 
