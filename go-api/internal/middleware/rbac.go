@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/fyerfyer/fyer-manus/go-api/internal/logger"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/model"
@@ -294,7 +295,7 @@ func BuildResourceOwnerChecker(paramName string) func(*gin.Context) (string, err
 			return "", nil
 		}
 
-		// 这里应该根据实际业务逻辑查询资源所有者
+		// TODO: 这里应该根据实际业务逻辑查询资源所有者
 		// 示例：从数据库查询会话所有者
 		// 实际实现时需要注入相应的服务
 		return resourceID, nil
@@ -308,7 +309,7 @@ func ParsePermissionFromPath(c *gin.Context) string {
 
 	// 简单的路径到权限映射
 	switch {
-	case containsPath(path, "/chat"):
+	case containsPath(path, "chat"):
 		switch method {
 		case "GET":
 			return model.PermissionChatRead
@@ -319,9 +320,9 @@ func ParsePermissionFromPath(c *gin.Context) string {
 		case "DELETE":
 			return model.PermissionChatDelete
 		}
-	case containsPath(path, "/plugin"):
+	case containsPath(path, "plugin"):
 		return model.PermissionPluginExecute
-	case containsPath(path, "/admin"):
+	case containsPath(path, "admin"):
 		return model.PermissionSystemAdmin
 	}
 
@@ -330,7 +331,23 @@ func ParsePermissionFromPath(c *gin.Context) string {
 
 // containsPath 检查路径是否包含指定字符串
 func containsPath(path, substr string) bool {
-	return len(path) >= len(substr) &&
-		(path == substr ||
-			(len(path) > len(substr) && path[:len(substr)] == substr && path[len(substr)] == '/'))
+	// 如果子字符串为空，返回true
+	if substr == "" {
+		return true
+	}
+
+	// 检查路径中是否包含子字符串
+	if strings.Contains(path, substr) {
+		// 找到子字符串在路径中的位置
+		index := strings.Index(path, substr)
+
+		// 检查子字符串是否作为路径段存在（前面是/或开始，后面是/或结束）
+		validStart := index == 0 || path[index-1] == '/'
+		endIndex := index + len(substr)
+		validEnd := endIndex == len(path) || path[endIndex] == '/'
+
+		return validStart && validEnd
+	}
+
+	return false
 }

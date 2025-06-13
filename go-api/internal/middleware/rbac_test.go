@@ -605,25 +605,25 @@ func TestContainsPath(t *testing.T) {
 		{
 			name:     "exact match",
 			path:     "/chat",
-			substr:   "/chat",
+			substr:   "chat",
 			expected: true,
 		},
 		{
-			name:     "path starts with substr and has slash",
-			path:     "/chat/sessions",
-			substr:   "/chat",
+			name:     "path contains substr as segment",
+			path:     "/api/v1/chat/sessions",
+			substr:   "chat",
 			expected: true,
 		},
 		{
 			name:     "path starts with substr but no slash",
 			path:     "/chatroom",
-			substr:   "/chat",
+			substr:   "chat",
 			expected: false,
 		},
 		{
 			name:     "path does not contain substr",
 			path:     "/api/v1/users",
-			substr:   "/chat",
+			substr:   "chat",
 			expected: false,
 		},
 		{
@@ -635,8 +635,14 @@ func TestContainsPath(t *testing.T) {
 		{
 			name:     "substr longer than path",
 			path:     "/a",
-			substr:   "/api",
+			substr:   "api",
 			expected: false,
+		},
+		{
+			name:     "plugin path match",
+			path:     "/api/v1/plugin/execute",
+			substr:   "plugin",
+			expected: true,
 		},
 	}
 
@@ -658,8 +664,6 @@ func setupRBACTestEnv(t *testing.T) {
 
 	// 自动迁移表结构
 	db := database.Get()
-	err = db.AutoMigrate(&model.User{}, &model.Role{})
-	require.NoError(t, err, "failed to migrate tables")
 
 	// 清理测试数据
 	db.Exec("TRUNCATE TABLE user_roles CASCADE")

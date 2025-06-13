@@ -194,20 +194,29 @@ func RateLimitByIP() gin.HandlerFunc {
 
 // getClientIdentifier 获取客户端标识符
 func getClientIdentifier(c *gin.Context) string {
+	logger.Debug("Getting client identifier")
+
 	// 优先使用用户ID
 	if claims, ok := GetCurrentUser(c); ok {
-		return "user:" + claims.UserID.String()
+		userID := claims.UserID.String()
+		logger.Debug("Found user claims", zap.String("user_id", userID))
+		return "user:" + userID
 	}
+	logger.Debug("No user claims found")
 
 	// 其次使用API Key
 	if apiKey := c.GetHeader("X-API-Key"); apiKey != "" {
+		logger.Debug("Found API key", zap.String("api_key", apiKey))
 		return "api:" + apiKey
 	}
+	logger.Debug("No API key found")
 
 	// 最后使用IP地址
 	if ip := getClientIP(c); ip != "" {
+		logger.Debug("Found client IP", zap.String("ip", ip))
 		return "ip:" + ip
 	}
+	logger.Debug("No client IP found")
 
 	return ""
 }
@@ -216,20 +225,26 @@ func getClientIdentifier(c *gin.Context) string {
 func getClientIP(c *gin.Context) string {
 	// 优先检查X-Forwarded-For
 	if xff := c.GetHeader("X-Forwarded-For"); xff != "" {
+		logger.Debug("Found X-Forwarded-For header", zap.String("xff", xff))
 		// X-Forwarded-For可能包含多个IP，取第一个
 		ips := strings.Split(xff, ",")
 		if len(ips) > 0 {
-			return strings.TrimSpace(ips[0])
+			ip := strings.TrimSpace(ips[0])
+			logger.Debug("Extracted IP from X-Forwarded-For", zap.String("ip", ip))
+			return ip
 		}
 	}
 
 	// 检查X-Real-IP
 	if xri := c.GetHeader("X-Real-IP"); xri != "" {
+		logger.Debug("Found X-Real-IP header", zap.String("x_real_ip", xri))
 		return xri
 	}
 
 	// 使用RemoteAddr
-	return c.ClientIP()
+	clientIP := c.ClientIP()
+	logger.Debug("Using ClientIP()", zap.String("client_ip", clientIP))
+	return clientIP
 }
 
 // setRateLimitHeaders 设置限流相关的响应头

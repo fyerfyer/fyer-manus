@@ -1,6 +1,8 @@
 module github.com/fyerfyer/fyer-manus/go-api
 
-go 1.24.4
+go 1.23.0
+
+toolchain go1.23.10
 
 require (
 	github.com/gin-gonic/gin v1.10.1
