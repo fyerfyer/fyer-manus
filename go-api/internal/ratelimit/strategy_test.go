@@ -10,9 +10,14 @@ import (
 func TestNewStrategyManager(t *testing.T) {
 	manager := NewStrategyManager()
 	assert.NotNil(t, manager, "strategy manager should not be nil")
-	assert.NotNil(t, manager.rules, "rules slice should not be nil")
+	assert.NotNil(t, manager.routeTree, "route tree should not be nil")
 	assert.NotNil(t, manager.keyGen, "key generator should not be nil")
 	assert.NotNil(t, manager.strategies, "strategies map should not be nil")
+
+	// 验证初始状态
+	assert.Equal(t, 0, manager.routeTree.Len(), "should start with no rules in route tree")
+	assert.IsType(t, &DefaultKeyGenerator{}, manager.keyGen, "should start with default key generator")
+	assert.Len(t, manager.strategies, 0, "should start with no registered strategies")
 }
 
 func TestStrategyManager_AddRule(t *testing.T) {
@@ -21,6 +26,7 @@ func TestStrategyManager_AddRule(t *testing.T) {
 	rule := Rule{
 		Name:    "test_rule",
 		Pattern: "/api/test",
+		Methods: []string{"GET", "POST"},
 		Config: Config{
 			Strategy: StrategyFixedWindow,
 			Rate:     10,
@@ -30,13 +36,89 @@ func TestStrategyManager_AddRule(t *testing.T) {
 	}
 
 	// 添加规则前
-	assert.Len(t, manager.rules, 0, "should start with no rules")
+	assert.Equal(t, 0, manager.routeTree.Len(), "should start with no rules")
 
 	manager.AddRule(rule)
 
 	// 添加规则后
-	assert.Len(t, manager.rules, 1, "should have one rule after adding")
-	assert.Equal(t, rule.Name, manager.rules[0].Name, "rule name should match")
+	assert.Equal(t, 1, manager.routeTree.Len(), "should have one rule after adding")
+
+	// 验证规则是否正确添加到 radix 树中
+	key := manager.buildRouteKey(rule.Pattern, rule.Name)
+	value, exists := manager.routeTree.Get([]byte(key))
+	assert.True(t, exists, "rule should exist in route tree")
+	assert.NotNil(t, value, "rule value should not be nil")
+
+	// 验证存储的路由规则
+	routeRule, ok := value.(*RouteRule)
+	assert.True(t, ok, "value should be a RouteRule")
+	assert.Equal(t, rule.Name, routeRule.Rule.Name, "rule name should match")
+	assert.Equal(t, rule.Pattern, routeRule.Rule.Pattern, "rule pattern should match")
+	assert.Equal(t, rule.Config.Strategy, routeRule.Rule.Config.Strategy, "rule strategy should match")
+
+	// 验证HTTP方法设置
+	assert.True(t, routeRule.Methods["GET"], "GET method should be enabled")
+	assert.True(t, routeRule.Methods["POST"], "POST method should be enabled")
+	assert.False(t, routeRule.Methods["PUT"], "PUT method should not be enabled")
+
+	// 测试添加无HTTP方法的规则（应该默认支持所有方法）
+	rule2 := Rule{
+		Name:    "test_rule_no_methods",
+		Pattern: "/api/test2",
+		Config: Config{
+			Strategy: StrategyFixedWindow,
+			Rate:     5,
+			Period:   time.Minute,
+			Enabled:  true,
+		},
+	}
+
+	manager.AddRule(rule2)
+	assert.Equal(t, 2, manager.routeTree.Len(), "should have two rules after adding second rule")
+
+	// 验证第二个规则
+	key2 := manager.buildRouteKey(rule2.Pattern, rule2.Name)
+	value2, exists2 := manager.routeTree.Get([]byte(key2))
+	assert.True(t, exists2, "second rule should exist in route tree")
+
+	routeRule2, ok2 := value2.(*RouteRule)
+	assert.True(t, ok2, "second value should be a RouteRule")
+	assert.True(t, routeRule2.Methods["*"], "should support all methods when no methods specified")
+
+	// 测试添加带头部匹配的规则
+	rule3 := Rule{
+		Name:    "test_rule_with_headers",
+		Pattern: "/api/test3",
+		Methods: []string{"POST"},
+		Headers: map[string]string{
+			"Content-Type": "application/json",
+			"X-API-Key":    "test-key",
+		},
+		Config: Config{
+			Strategy: StrategyFixedWindow,
+			Rate:     15,
+			Period:   time.Minute,
+			Enabled:  true,
+		},
+	}
+
+	manager.AddRule(rule3)
+	assert.Equal(t, 3, manager.routeTree.Len(), "should have three rules after adding third rule")
+
+	// 验证第三个规则的头部匹配
+	key3 := manager.buildRouteKey(rule3.Pattern, rule3.Name)
+	value3, exists3 := manager.routeTree.Get([]byte(key3))
+	assert.True(t, exists3, "third rule should exist in route tree")
+
+	routeRule3, ok3 := value3.(*RouteRule)
+	assert.True(t, ok3, "third value should be a RouteRule")
+	assert.Equal(t, "application/json", routeRule3.Headers["Content-Type"], "Content-Type header should match")
+	assert.Equal(t, "test-key", routeRule3.Headers["X-API-Key"], "X-API-Key header should match")
+
+	// 验证优先级计算
+	assert.NotZero(t, routeRule.Priority, "rule should have a calculated priority")
+	assert.NotZero(t, routeRule2.Priority, "second rule should have a calculated priority")
+	assert.NotZero(t, routeRule3.Priority, "third rule should have a calculated priority")
 }
 
 func TestStrategyManager_SetKeyGenerator(t *testing.T) {
@@ -151,14 +233,14 @@ func TestStrategyManager_FindMatchingRule(t *testing.T) {
 			path:         "/api/headers",
 			method:       "POST",
 			headers:      map[string]string{"Content-Type": "text/plain"},
-			expectedRule: "any_path",
+			expectedRule: "wildcard_match", // 修改：应该匹配 /api/* 而不是 *
 			shouldMatch:  true,
 		},
 		{
 			name:         "method mismatch",
 			path:         "/api/exact",
 			method:       "POST",
-			expectedRule: "any_path",
+			expectedRule: "wildcard_match", // 应该匹配 /api/* 而不是 *
 			shouldMatch:  true,
 		},
 		{

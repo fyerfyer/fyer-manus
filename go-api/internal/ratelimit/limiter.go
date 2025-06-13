@@ -73,6 +73,31 @@ func (l *Limiter) AddRule(rule Rule) error {
 	return nil
 }
 
+// DeleteRule 删除限流规则
+func (l *Limiter) DeleteRule(pattern, name string) bool {
+	return l.manager.DeleteRule(pattern, name)
+}
+
+// UpdateRule 更新限流规则
+func (l *Limiter) UpdateRule(rule Rule) error {
+	if err := ValidateConfig(rule.Config); err != nil {
+		return fmt.Errorf("invalid rule config: %w", err)
+	}
+
+	if !l.manager.UpdateRule(rule) {
+		return fmt.Errorf("rule not found: %s", rule.Name)
+	}
+	return nil
+}
+
+// GetRouteStats 获取路由统计信息
+func (l *Limiter) GetRouteStats() map[string]interface{} {
+	return l.manager.GetStats()
+}
+
+// ...existing code...
+// (保留所有现有的策略实现代码)
+
 // FixedWindowStrategy 固定窗口策略
 type FixedWindowStrategy struct {
 	redis *redis.Client

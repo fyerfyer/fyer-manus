@@ -2,7 +2,11 @@ package ratelimit
 
 import (
 	"fmt"
+	"strings"
+	"sync"
 	"time"
+
+	iradix "github.com/hashicorp/go-immutable-radix"
 )
 
 // Strategy 限流策略类型
@@ -23,6 +27,14 @@ type Config struct {
 	Burst     int           `yaml:"burst" json:"burst"`           // 突发容量
 	KeyPrefix string        `yaml:"key_prefix" json:"key_prefix"` // Redis键前缀
 	Enabled   bool          `yaml:"enabled" json:"enabled"`       // 是否启用
+}
+
+// RouteRule 路由规则
+type RouteRule struct {
+	Rule     Rule              `json:"rule"`
+	Methods  map[string]bool   `json:"methods"`  // 支持的HTTP方法
+	Headers  map[string]string `json:"headers"`  // 头部匹配
+	Priority int               `json:"priority"` // 优先级，数字越小优先级越高
 }
 
 // Rule 限流规则
@@ -97,9 +109,10 @@ type Result struct {
 
 // StrategyManager 策略管理器
 type StrategyManager struct {
-	rules      []Rule
-	keyGen     KeyGenerator
-	strategies map[Strategy]StrategyImpl
+	routeTree  *iradix.Tree              // 路由规则树
+	keyGen     KeyGenerator              // 键生成器
+	strategies map[Strategy]StrategyImpl // 策略实现
+	mutex      sync.RWMutex              // 读写锁
 }
 
 // StrategyImpl 策略实现接口
@@ -111,7 +124,7 @@ type StrategyImpl interface {
 // NewStrategyManager 创建策略管理器
 func NewStrategyManager() *StrategyManager {
 	return &StrategyManager{
-		rules:      make([]Rule, 0),
+		routeTree:  iradix.New(),
 		keyGen:     &DefaultKeyGenerator{},
 		strategies: make(map[Strategy]StrategyImpl),
 	}
@@ -119,65 +132,142 @@ func NewStrategyManager() *StrategyManager {
 
 // AddRule 添加限流规则
 func (sm *StrategyManager) AddRule(rule Rule) {
-	sm.rules = append(sm.rules, rule)
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	// 构建路由规则
+	routeRule := &RouteRule{
+		Rule:     rule,
+		Methods:  make(map[string]bool),
+		Headers:  rule.Headers,
+		Priority: sm.calculatePriority(rule.Pattern),
+	}
+
+	// 设置支持的HTTP方法
+	if len(rule.Methods) == 0 {
+		// 如果没有指定方法，默认支持所有方法
+		routeRule.Methods["*"] = true
+	} else {
+		for _, method := range rule.Methods {
+			routeRule.Methods[strings.ToUpper(method)] = true
+		}
+	}
+
+	// 将规则插入radix树
+	// 使用规则名称和模式组合作为键，确保唯一性
+	key := sm.buildRouteKey(rule.Pattern, rule.Name)
+	sm.routeTree, _, _ = sm.routeTree.Insert([]byte(key), routeRule)
+}
+
+// buildRouteKey 构建路由键
+func (sm *StrategyManager) buildRouteKey(pattern, name string) string {
+	// 使用完整的模式和名称构建唯一键
+	key := fmt.Sprintf("%s#%s", pattern, name)
+	return key
+}
+
+// calculatePriority 计算规则优先级
+func (sm *StrategyManager) calculatePriority(pattern string) int {
+	// 具体路径优先级高于通配符路径
+	if pattern == "*" {
+		return 1000 // 最低优先级
+	}
+	if strings.HasSuffix(pattern, "*") {
+		// 前缀越长，优先级越高
+		return 500 - len(strings.TrimSuffix(pattern, "*"))
+	}
+	// 精确匹配优先级最高
+	return 100 - len(pattern)
 }
 
 // SetKeyGenerator 设置键生成器
 func (sm *StrategyManager) SetKeyGenerator(keyGen KeyGenerator) {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
 	sm.keyGen = keyGen
 }
 
 // RegisterStrategy 注册策略实现
 func (sm *StrategyManager) RegisterStrategy(strategy StrategyImpl) {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
 	sm.strategies[strategy.Name()] = strategy
 }
 
 // FindMatchingRule 查找匹配的规则
 func (sm *StrategyManager) FindMatchingRule(path, method string, headers map[string]string) *Rule {
-	for _, rule := range sm.rules {
-		if sm.ruleMatches(rule, path, method, headers) {
-			return &rule
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	method = strings.ToUpper(method)
+	var bestMatch *RouteRule
+	var bestMatchLength int
+
+	// 遍历所有规则找到最佳匹配
+	sm.routeTree.Root().Walk(func(key []byte, value interface{}) bool {
+		routeRule := value.(*RouteRule)
+
+		// 检查路径是否匹配
+		if !sm.pathMatches(routeRule.Rule.Pattern, path) {
+			return false // 继续遍历
 		}
+
+		// 检查HTTP方法
+		if !routeRule.Methods["*"] && !routeRule.Methods[method] {
+			return false // 继续遍历
+		}
+
+		// 检查头部匹配
+		if !sm.headersMatch(routeRule.Headers, headers) {
+			return false // 继续遍历
+		}
+
+		// 计算匹配长度（用于选择最佳匹配）
+		var matchLength int
+		if routeRule.Rule.Pattern == "*" {
+			matchLength = 0 // 通配符优先级最低
+		} else if strings.HasSuffix(routeRule.Rule.Pattern, "*") {
+			// 前缀匹配的长度是去掉*后的长度
+			matchLength = len(strings.TrimSuffix(routeRule.Rule.Pattern, "*"))
+		} else {
+			// 精确匹配的长度是完整长度
+			matchLength = len(routeRule.Rule.Pattern)
+		}
+
+		// 选择最佳匹配（最长匹配优先，如果长度相同则优先级高的优先）
+		if bestMatch == nil || matchLength > bestMatchLength ||
+			(matchLength == bestMatchLength && routeRule.Priority < bestMatch.Priority) {
+			bestMatch = routeRule
+			bestMatchLength = matchLength
+		}
+
+		return false // 继续遍历所有规则
+	})
+
+	if bestMatch != nil {
+		return &bestMatch.Rule
 	}
+
 	return nil
 }
 
-// ruleMatches 检查规则是否匹配
-func (sm *StrategyManager) ruleMatches(rule Rule, path, method string, headers map[string]string) bool {
-	// 检查路径模式匹配
-	if !sm.pathMatches(rule.Pattern, path) {
-		return false
+// headersMatch 检查头部是否匹配
+func (sm *StrategyManager) headersMatch(ruleHeaders, requestHeaders map[string]string) bool {
+	if len(ruleHeaders) == 0 {
+		return true
 	}
 
-	// 检查HTTP方法
-	if len(rule.Methods) > 0 {
-		methodMatch := false
-		for _, m := range rule.Methods {
-			if m == method {
-				methodMatch = true
-				break
-			}
-		}
-		if !methodMatch {
+	for key, expectedValue := range ruleHeaders {
+		if actualValue, exists := requestHeaders[key]; !exists || actualValue != expectedValue {
 			return false
 		}
 	}
-
-	// 检查头部匹配
-	if len(rule.Headers) > 0 {
-		for key, value := range rule.Headers {
-			if headers[key] != value {
-				return false
-			}
-		}
-	}
-
 	return true
 }
 
 // pathMatches 路径匹配检查
 func (sm *StrategyManager) pathMatches(pattern, path string) bool {
-	// 简单的模式匹配，支持通配符*
+	// 完全匹配
 	if pattern == "*" {
 		return true
 	}
@@ -186,9 +276,10 @@ func (sm *StrategyManager) pathMatches(pattern, path string) bool {
 	}
 
 	// 前缀匹配
-	if len(pattern) > 0 && pattern[len(pattern)-1] == '*' {
-		prefix := pattern[:len(pattern)-1]
-		return len(path) >= len(prefix) && path[:len(prefix)] == prefix
+	if strings.HasSuffix(pattern, "*") {
+		prefix := strings.TrimSuffix(pattern, "*")
+		result := strings.HasPrefix(path, prefix)
+		return result
 	}
 
 	return false
@@ -200,12 +291,16 @@ func (sm *StrategyManager) Check(rule Rule, identifier string) (*Result, error) 
 		return &Result{Allowed: true}, nil
 	}
 
+	sm.mutex.RLock()
 	strategy, exists := sm.strategies[rule.Config.Strategy]
+	keyGen := sm.keyGen
+	sm.mutex.RUnlock()
+
 	if !exists {
 		return nil, fmt.Errorf("unknown rate limit strategy: %s", rule.Config.Strategy)
 	}
 
-	key := sm.keyGen.GenerateKey(identifier, rule)
+	key := keyGen.GenerateKey(identifier, rule)
 	return strategy.Check(key, rule.Config)
 }
 
@@ -219,12 +314,88 @@ func (sm *StrategyManager) IsException(rule Rule, identifier string) bool {
 	return false
 }
 
+// GetStats 获取路由统计信息
+func (sm *StrategyManager) GetStats() map[string]interface{} {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	stats := map[string]interface{}{
+		"total_rules": sm.routeTree.Len(),
+		"rules":       make([]map[string]interface{}, 0),
+	}
+
+	rules := make([]map[string]interface{}, 0)
+	sm.routeTree.Root().Walk(func(key []byte, value interface{}) bool {
+		routeRule := value.(*RouteRule)
+		ruleStats := map[string]interface{}{
+			"name":     routeRule.Rule.Name,
+			"pattern":  routeRule.Rule.Pattern,
+			"methods":  routeRule.Rule.Methods,
+			"priority": routeRule.Priority,
+			"enabled":  routeRule.Rule.Config.Enabled,
+			"key":      string(key),
+		}
+		rules = append(rules, ruleStats)
+		return false // 继续遍历
+	})
+
+	stats["rules"] = rules
+	return stats
+}
+
+// DeleteRule 删除规则
+func (sm *StrategyManager) DeleteRule(pattern, name string) bool {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	key := sm.buildRouteKey(pattern, name)
+	newTree, _, existed := sm.routeTree.Delete([]byte(key))
+	if existed {
+		sm.routeTree = newTree
+	}
+	return existed
+}
+
+// UpdateRule 更新规则
+func (sm *StrategyManager) UpdateRule(rule Rule) bool {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	key := sm.buildRouteKey(rule.Pattern, rule.Name)
+
+	// 检查规则是否存在
+	if _, exists := sm.routeTree.Get([]byte(key)); !exists {
+		return false
+	}
+
+	// 构建新的路由规则
+	routeRule := &RouteRule{
+		Rule:     rule,
+		Methods:  make(map[string]bool),
+		Headers:  rule.Headers,
+		Priority: sm.calculatePriority(rule.Pattern),
+	}
+
+	// 设置支持的HTTP方法
+	if len(rule.Methods) == 0 {
+		routeRule.Methods["*"] = true
+	} else {
+		for _, method := range rule.Methods {
+			routeRule.Methods[strings.ToUpper(method)] = true
+		}
+	}
+
+	// 更新规则
+	sm.routeTree, _, _ = sm.routeTree.Insert([]byte(key), routeRule)
+	return true
+}
+
 // GetDefaultRules 获取默认限流规则
 func GetDefaultRules() []Rule {
 	return []Rule{
 		{
 			Name:    "api_global",
-			Pattern: "/api/*",
+			Pattern: "/api/",
 			Methods: []string{"GET", "POST", "PUT", "DELETE"},
 			Config: Config{
 				Strategy: StrategyFixedWindow,
@@ -235,7 +406,7 @@ func GetDefaultRules() []Rule {
 		},
 		{
 			Name:    "auth_strict",
-			Pattern: "/api/v1/auth/*",
+			Pattern: "/api/v1/auth/",
 			Methods: []string{"POST"},
 			Config: Config{
 				Strategy: StrategySlidingWindow,
@@ -246,7 +417,7 @@ func GetDefaultRules() []Rule {
 		},
 		{
 			Name:    "chat_normal",
-			Pattern: "/api/v1/chat/*",
+			Pattern: "/api/v1/chat/",
 			Methods: []string{"POST"},
 			Config: Config{
 				Strategy: StrategyTokenBucket,
@@ -258,7 +429,7 @@ func GetDefaultRules() []Rule {
 		},
 		{
 			Name:    "plugin_execute",
-			Pattern: "/api/v1/plugins/*/execute",
+			Pattern: "/api/v1/plugins/",
 			Methods: []string{"POST"},
 			Config: Config{
 				Strategy: StrategyLeakyBucket,
