@@ -100,7 +100,7 @@ func TestLimiter_SlidingWindowStrategy(t *testing.T) {
 
 	// 等待一段时间后重试
 	time.Sleep(2 * time.Second)
-	result, err = limiter.Check(rule, identifier)
+	_, err = limiter.Check(rule, identifier)
 	assert.NoError(t, err, "check should succeed")
 	// 滑动窗口中仍有部分请求，可能仍被拒绝
 }

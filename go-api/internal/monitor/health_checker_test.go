@@ -378,7 +378,12 @@ func TestHealthChecker_StartPeriodicCheck(t *testing.T) {
 }
 
 func TestHealthChecker_ConcurrentCheck(t *testing.T) {
-	checker := NewHealthChecker()
+	checker := &HealthChecker{
+		components: make(map[string]HealthCheckFunc),
+		cache:      make(map[string]ComponentHealth),
+		cacheTTL:   30 * time.Second,
+		startTime:  time.Now(),
+	}
 
 	// 注册多个慢速组件
 	for i := 0; i < 5; i++ {

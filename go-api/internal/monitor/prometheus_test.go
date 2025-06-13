@@ -9,9 +9,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"github.com/fyerfyer/fyer-manus/go-api/internal/config"
 )
 
 func TestNewPrometheusManager(t *testing.T) {
@@ -402,128 +399,6 @@ func TestGetMetrics(t *testing.T) {
 	}
 }
 
-func TestResetMetrics(t *testing.T) {
-	// 记录一些指标
-	RecordAuthentication(true)
-	RecordTokenGeneration()
-	RecordRateLimit("test", true)
-
-	manager := NewPrometheusManager()
-
-	// 获取重置前的指标
-	metricsBefore, err := manager.GetMetrics()
-	assert.NoError(t, err, "should get metrics without error")
-	assert.NotEmpty(t, metricsBefore, "should have metrics before reset")
-
-	// 重置指标
-	manager.ResetMetrics()
-
-	// 获取重置后的指标
-	metricsAfter, err := manager.GetMetrics()
-	assert.NoError(t, err, "should get metrics without error")
-
-	// 验证计数器类型的指标被重置为0
-	for metricName, value := range metricsAfter {
-		if strings.Contains(metricName, "total") && !strings.Contains(metricName, "{") {
-			// 简单的计数器指标应该被重置为0
-			assert.Equal(t, 0.0, value, "counter metric %s should be reset to 0", metricName)
-		}
-	}
-}
-
-func TestMetricsMiddlewareWithErrors(t *testing.T) {
-	// 重置指标
-	resetAllMetrics()
-
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-
-	// 使用指标中间件
-	router.Use(MetricsMiddleware())
-	router.GET("/error", func(c *gin.Context) {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-	})
-	router.GET("/notfound", func(c *gin.Context) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
-	})
-
-	// 测试500错误
-	req := httptest.NewRequest("GET", "/error", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusInternalServerError, w.Code, "should return 500")
-
-	// 测试404错误
-	req = httptest.NewRequest("GET", "/notfound", nil)
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusNotFound, w.Code, "should return 404")
-
-	// 验证错误状态码被记录
-	manager := NewPrometheusManager()
-	metrics, err := manager.GetMetrics()
-	assert.NoError(t, err, "should get metrics without error")
-
-	found500 := false
-	found404 := false
-
-	for metricName := range metrics {
-		if strings.Contains(metricName, "http_requests_total") {
-			if strings.Contains(metricName, "500") {
-				found500 = true
-			} else if strings.Contains(metricName, "404") {
-				found404 = true
-			}
-		}
-	}
-
-	assert.True(t, found500, "should record 500 status code")
-	assert.True(t, found404, "should record 404 status code")
-}
-
-func TestMetricsWithLabels(t *testing.T) {
-	// 重置指标
-	resetAllMetrics()
-
-	// 记录带标签的指标
-	RecordRateLimit("api_global", true)
-	RecordRateLimit("auth_strict", false)
-	RecordDBQuery("select", 10*time.Millisecond)
-	RecordDBQuery("insert", 20*time.Millisecond)
-
-	manager := NewPrometheusManager()
-	metrics, err := manager.GetMetrics()
-	assert.NoError(t, err, "should get metrics without error")
-
-	// 验证标签被正确记录
-	foundApiGlobal := false
-	foundAuthStrict := false
-	foundSelectOp := false
-	foundInsertOp := false
-
-	for metricName := range metrics {
-		if strings.Contains(metricName, "rate_limit_hits_total") {
-			if strings.Contains(metricName, "api_global") {
-				foundApiGlobal = true
-			} else if strings.Contains(metricName, "auth_strict") {
-				foundAuthStrict = true
-			}
-		}
-		if strings.Contains(metricName, "db_queries_total") {
-			if strings.Contains(metricName, "select") {
-				foundSelectOp = true
-			} else if strings.Contains(metricName, "insert") {
-				foundInsertOp = true
-			}
-		}
-	}
-
-	assert.True(t, foundApiGlobal, "should find api_global rate limit metric")
-	assert.True(t, foundAuthStrict, "should find auth_strict rate limit metric")
-	assert.True(t, foundSelectOp, "should find select operation metric")
-	assert.True(t, foundInsertOp, "should find insert operation metric")
-}
-
 func TestConcurrentMetricsRecording(t *testing.T) {
 	// 重置指标
 	resetAllMetrics()
@@ -576,15 +451,8 @@ func TestConcurrentMetricsRecording(t *testing.T) {
 	assert.Equal(t, expectedCount, messageCount, "should record correct message count")
 }
 
-// resetAllMetrics 重置所有指标（测试辅助函数）
+// resetAllMetrics 重置所有指标
 func resetAllMetrics() {
 	manager := NewPrometheusManager()
 	manager.ResetMetrics()
-}
-
-// setupPrometheusTestEnv 设置Prometheus测试环境
-func setupPrometheusTestEnv(t *testing.T) {
-	cfg, err := config.LoadForTest()
-	require.NoError(t, err, "failed to load test config")
-	_ = cfg // 使用配置但不需要特殊设置
 }

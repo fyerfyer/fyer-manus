@@ -110,6 +110,28 @@ func TestHub_BroadcastToAll(t *testing.T) {
 	hub.registerClient(client2)
 	hub.registerClient(sender)
 
+	// 清空注册时发送的欢迎消息
+	select {
+	case <-client1.send:
+		// 清空欢迎消息
+	case <-time.After(10 * time.Millisecond):
+		// 如果没有消息也继续
+	}
+
+	select {
+	case <-client2.send:
+		// 清空欢迎消息
+	case <-time.After(10 * time.Millisecond):
+		// 如果没有消息也继续
+	}
+
+	select {
+	case <-sender.send:
+		// 清空欢迎消息
+	case <-time.After(10 * time.Millisecond):
+		// 如果没有消息也继续
+	}
+
 	// 准备广播消息
 	testData := []byte(`{"type":"message","data":{"content":"broadcast test"}}`)
 	msg := &BroadcastMessage{
@@ -163,6 +185,9 @@ func TestHub_BroadcastToUser(t *testing.T) {
 	hub.registerClient(targetClient2)
 	hub.registerClient(otherClient)
 	hub.registerClient(sender)
+
+	// 清空注册时发送的欢迎消息
+	drainAllClientChannels([]*Client{targetClient1, targetClient2, otherClient, sender})
 
 	// 准备用户广播消息
 	testData := []byte(`{"type":"message","data":{"content":"user broadcast test"}}`)
@@ -230,6 +255,9 @@ func TestHub_BroadcastToSession(t *testing.T) {
 	hub.JoinSession(client1, sessionID)
 	hub.JoinSession(client2, sessionID)
 	hub.JoinSession(sender, sessionID)
+
+	// 清空注册时发送的欢迎消息
+	drainAllClientChannels([]*Client{client1, client2, outsideClient, sender})
 
 	// 准备会话广播消息
 	testData := []byte(`{"type":"message","data":{"content":"session broadcast test"}}`)
@@ -621,13 +649,25 @@ func TestHub_CleanupInactiveClients(t *testing.T) {
 	setupHubTestEnv(t)
 
 	hub := NewHub()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// 启动Hub事件循环
+	go hub.Run(ctx)
+
+	// 等待Hub启动
+	time.Sleep(10 * time.Millisecond)
 
 	// 创建客户端
 	activeClient := createMockClient(t, hub, uuid.New(), "active")
 	inactiveClient := createMockClient(t, hub, uuid.New(), "inactive")
 
-	hub.registerClient(activeClient)
-	hub.registerClient(inactiveClient)
+	// 通过通道注册客户端
+	hub.register <- activeClient
+	hub.register <- inactiveClient
+
+	// 等待注册完成
+	time.Sleep(50 * time.Millisecond)
 
 	// 设置不活跃客户端的最后ping时间为很久以前
 	inactiveClient.LastPing = time.Now().Add(-10 * time.Minute)
@@ -638,7 +678,7 @@ func TestHub_CleanupInactiveClients(t *testing.T) {
 	hub.cleanupInactiveClients()
 
 	// 等待清理完成
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	// 验证不活跃客户端被清理
 	assert.Equal(t, 1, len(hub.clients), "should have 1 client after cleanup")
@@ -667,4 +707,24 @@ func setupHubTestEnv(t *testing.T) {
 	cfg, err := config.LoadForTest()
 	require.NoError(t, err, "failed to load test config")
 	_ = cfg // 使用配置但不需要特殊设置
+}
+
+// drainClientChannel 清空客户端通道中的所有消息
+func drainClientChannel(client *Client, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		select {
+		case <-client.send:
+			// 继续清空
+		default:
+			return // 通道已空
+		}
+	}
+}
+
+// drainAllClientChannels 清空所有客户端通道
+func drainAllClientChannels(clients []*Client) {
+	for _, client := range clients {
+		drainClientChannel(client, 50*time.Millisecond)
+	}
 }

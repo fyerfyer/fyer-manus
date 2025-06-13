@@ -257,7 +257,7 @@ func (pm *PrometheusManager) GetMetrics() (map[string]float64, error) {
 	return metrics, nil
 }
 
-// ResetMetrics 重置指定指标（测试用）
+// ResetMetrics 重置指定指标
 func (pm *PrometheusManager) ResetMetrics() {
 	httpRequestsTotal.Reset()
 	httpRequestDuration.Reset()

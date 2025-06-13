@@ -273,8 +273,7 @@ func (hc *HealthChecker) checkRedis(ctx context.Context) ComponentHealth {
 func (hc *HealthChecker) checkMemory(ctx context.Context) ComponentHealth {
 	start := time.Now()
 
-	// 这里可以使用第三方库如 gopsutil 获取系统内存信息
-	// 为了简化，这里只做基本检查
+	// TODO: 这里可以使用第三方库如 gopsutil 获取系统内存信息
 	health := ComponentHealth{
 		Name:      "memory",
 		Status:    HealthStatusHealthy,
