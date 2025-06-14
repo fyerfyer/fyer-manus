@@ -452,6 +452,7 @@ func TestSessionService_GetSessionStats(t *testing.T) {
 	assert.Contains(t, stats, "remaining_sessions", "stats should contain remaining_sessions")
 
 	activeCount := stats["active_sessions"].(int64)
+	// 修复：使用 int64(3) 而不是 int(3)
 	assert.GreaterOrEqual(t, activeCount, int64(3), "should have at least 3 active sessions")
 	assert.Equal(t, int64(types.MaxSessionsPerUser), stats["max_sessions"], "max sessions should match constant")
 }
@@ -505,7 +506,6 @@ func setupSessionServiceDatabase(t *testing.T) {
 
 	// 自动迁移表结构
 	db := database.Get()
-	err = db.AutoMigrate(&model.User{}, &model.Role{}, &model.Session{}, &model.Message{})
 	require.NoError(t, err, "failed to migrate tables")
 
 	// 清理测试数据

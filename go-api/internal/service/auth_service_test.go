@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/fyerfyer/fyer-manus/go-api/internal/cache"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/config"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/database"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/model"
@@ -456,13 +457,15 @@ func setupAuthServiceDatabase(t *testing.T) {
 
 	// 自动迁移表结构
 	db := database.Get()
-	err = db.AutoMigrate(&model.User{}, &model.Role{})
 	require.NoError(t, err, "failed to migrate tables")
 
 	// 清理测试数据
 	db.Exec("TRUNCATE TABLE user_roles CASCADE")
 	db.Exec("TRUNCATE TABLE users CASCADE")
 	db.Exec("TRUNCATE TABLE roles CASCADE")
+
+	err = cache.Init(&cfg.Redis)
+	require.NoError(t, err, "failed to init cache")
 
 	// 设置全局配置（AuthService需要）
 	config.LoadForTest()

@@ -333,8 +333,8 @@ func (s *SessionService) GetSessionStats(ctx context.Context, userID uuid.UUID) 
 
 	return map[string]interface{}{
 		"active_sessions":    activeCount,
-		"max_sessions":       types.MaxSessionsPerUser,
-		"remaining_sessions": types.MaxSessionsPerUser - activeCount,
+		"max_sessions":       int64(types.MaxSessionsPerUser),
+		"remaining_sessions": int64(types.MaxSessionsPerUser - activeCount),
 	}, nil
 }
 
