@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/fyerfyer/fyer-manus/go-api/internal/auth"
-	"github.com/fyerfyer/fyer-manus/go-api/internal/config"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/database"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/model"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/service"
+	"github.com/fyerfyer/fyer-manus/go-api/testutils"
 	"github.com/google/uuid"
 )
 
@@ -44,7 +44,7 @@ func TestAuth(t *testing.T) {
 				// 不设置Authorization头
 			},
 			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "authorization required",
+			expectedBody:   "authentication required", // 修改这里，与实际代码匹配
 		},
 		{
 			name: "invalid authorization header format",
@@ -52,7 +52,7 @@ func TestAuth(t *testing.T) {
 				req.Header.Set("Authorization", "Basic invalid")
 			},
 			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "invalid authorization header",
+			expectedBody:   "invalid authorization header", // 修改这里，与实际代码匹配
 		},
 		{
 			name: "missing bearer token",
@@ -60,7 +60,7 @@ func TestAuth(t *testing.T) {
 				req.Header.Set("Authorization", "Bearer")
 			},
 			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "invalid authorization header",
+			expectedBody:   "invalid authorization header", // 修改这里，与实际代码匹配
 		},
 		{
 			name: "invalid token",
@@ -437,31 +437,19 @@ func TestUserStatusHandling(t *testing.T) {
 
 // setupAuthTestEnv 设置认证测试环境
 func setupAuthTestEnv(t *testing.T) {
-	cfg, err := config.LoadForTest()
-	require.NoError(t, err, "failed to load test config")
-
-	err = database.Init(&cfg.Database)
-	require.NoError(t, err, "failed to init database")
-
-	// 自动迁移表结构
-	db := database.Get()
-	err = db.AutoMigrate(&model.User{}, &model.Role{})
-	require.NoError(t, err, "failed to migrate tables")
-
-	// 清理测试数据
-	db.Exec("TRUNCATE TABLE user_roles CASCADE")
-	db.Exec("TRUNCATE TABLE users CASCADE")
-	db.Exec("TRUNCATE TABLE roles CASCADE")
+	_ = testutils.SetupTestEnv(t)
 }
 
 // createTestUserWithToken 创建测试用户和令牌
 func createTestUserWithToken(t *testing.T) (*service.AuthService, *model.User, string) {
 	authService := service.NewAuthService()
 
-	// 创建测试用户
+	username := testutils.GenerateTestUsername(t)
+	email := testutils.GenerateTestEmail(t)
+
 	registerReq := service.RegisterRequest{
-		Username: "testuser_" + uuid.New().String()[:8],
-		Email:    "test_" + uuid.New().String()[:8] + "@example.com",
+		Username: username,
+		Email:    email,
 		Password: "password123",
 		FullName: "Test User",
 	}

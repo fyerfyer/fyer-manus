@@ -17,7 +17,6 @@ import (
 func TestNewSessionService(t *testing.T) {
 	// 初始化数据库
 	setupSessionServiceDatabase(t)
-	defer database.Close()
 
 	service := NewSessionService()
 	assert.NotNil(t, service, "session service should not be nil")
@@ -29,7 +28,6 @@ func TestNewSessionService(t *testing.T) {
 func TestSessionService_CreateSession(t *testing.T) {
 	// 初始化数据库
 	setupSessionServiceDatabase(t)
-	defer database.Close()
 
 	service := NewSessionService()
 	ctx := context.Background()
@@ -83,7 +81,6 @@ func TestSessionService_CreateSession(t *testing.T) {
 func TestSessionService_GetSession(t *testing.T) {
 	// 初始化数据库
 	setupSessionServiceDatabase(t)
-	defer database.Close()
 
 	service := NewSessionService()
 	ctx := context.Background()
@@ -114,7 +111,6 @@ func TestSessionService_GetSession(t *testing.T) {
 func TestSessionService_UpdateSession(t *testing.T) {
 	// 初始化数据库
 	setupSessionServiceDatabase(t)
-	defer database.Close()
 
 	service := NewSessionService()
 	ctx := context.Background()
@@ -163,7 +159,6 @@ func TestSessionService_UpdateSession(t *testing.T) {
 func TestSessionService_DeleteSession(t *testing.T) {
 	// 初始化数据库
 	setupSessionServiceDatabase(t)
-	defer database.Close()
 
 	service := NewSessionService()
 	ctx := context.Background()
@@ -198,7 +193,6 @@ func TestSessionService_DeleteSession(t *testing.T) {
 func TestSessionService_ArchiveSession(t *testing.T) {
 	// 初始化数据库
 	setupSessionServiceDatabase(t)
-	defer database.Close()
 
 	service := NewSessionService()
 	ctx := context.Background()
@@ -233,7 +227,6 @@ func TestSessionService_ArchiveSession(t *testing.T) {
 func TestSessionService_ListSessions(t *testing.T) {
 	// 初始化数据库
 	setupSessionServiceDatabase(t)
-	defer database.Close()
 
 	service := NewSessionService()
 	ctx := context.Background()
@@ -308,7 +301,6 @@ func TestSessionService_ListSessions(t *testing.T) {
 func TestSessionService_SearchSessions(t *testing.T) {
 	// 初始化数据库
 	setupSessionServiceDatabase(t)
-	defer database.Close()
 
 	service := NewSessionService()
 	ctx := context.Background()
@@ -366,7 +358,6 @@ func TestSessionService_SearchSessions(t *testing.T) {
 func TestSessionService_UpdateMessageCount(t *testing.T) {
 	// 初始化数据库
 	setupSessionServiceDatabase(t)
-	defer database.Close()
 
 	service := NewSessionService()
 	ctx := context.Background()
@@ -388,7 +379,6 @@ func TestSessionService_UpdateMessageCount(t *testing.T) {
 func TestSessionService_AddTokenUsage(t *testing.T) {
 	// 初始化数据库
 	setupSessionServiceDatabase(t)
-	defer database.Close()
 
 	service := NewSessionService()
 	ctx := context.Background()
@@ -425,7 +415,6 @@ func TestSessionService_AddTokenUsage(t *testing.T) {
 func TestSessionService_GetSessionStats(t *testing.T) {
 	// 初始化数据库
 	setupSessionServiceDatabase(t)
-	defer database.Close()
 
 	service := NewSessionService()
 	ctx := context.Background()
@@ -460,7 +449,6 @@ func TestSessionService_GetSessionStats(t *testing.T) {
 func TestSessionService_CleanupExpiredSessions(t *testing.T) {
 	// 初始化数据库
 	setupSessionServiceDatabase(t)
-	defer database.Close()
 
 	service := NewSessionService()
 	ctx := context.Background()
@@ -473,7 +461,6 @@ func TestSessionService_CleanupExpiredSessions(t *testing.T) {
 func TestSessionService_SessionLimits(t *testing.T) {
 	// 初始化数据库
 	setupSessionServiceDatabase(t)
-	defer database.Close()
 
 	service := NewSessionService()
 	ctx := context.Background()

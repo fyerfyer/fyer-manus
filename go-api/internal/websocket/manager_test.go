@@ -22,6 +22,7 @@ import (
 )
 
 func TestNewManager(t *testing.T) {
+	setupManagerTestEnv(t)
 	manager := NewManager()
 
 	assert.NotNil(t, manager, "manager should not be nil")
@@ -284,8 +285,7 @@ func TestManager_GetUserClients(t *testing.T) {
 	// 获取用户客户端列表
 	clients := manager.GetUserClients(userID)
 
-	assert.NotNil(t, clients, "clients list should not be nil")
-	assert.Len(t, clients, 0, "should have no clients for new user")
+	assert.Nil(t, clients, "should return nil for non-existent user clients")
 }
 
 func TestManager_DisconnectUser(t *testing.T) {

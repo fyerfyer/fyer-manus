@@ -99,20 +99,14 @@ func (j *JWTManager) ParseToken(tokenString string) (*Claims, error) {
 
 // VerifyToken 验证令牌有效性
 func (j *JWTManager) VerifyToken(tokenString string) (*Claims, error) {
+	// ParseToken 已经会验证令牌的有效期、签名等
 	claims, err := j.ParseToken(tokenString)
 	if err != nil {
 		return nil, err
 	}
 
-	// 检查令牌是否过期
-	if claims.ExpiresAt != nil && claims.ExpiresAt.Before(time.Now()) {
-		return nil, errors.New("token expired")
-	}
-
-	// 检查令牌是否还未生效
-	if claims.NotBefore != nil && claims.NotBefore.After(time.Now()) {
-		return nil, errors.New("token not yet valid")
-	}
+	// 移除手动的时间检查，让JWT库自己处理
+	// JWT库在ParseToken时已经验证了ExpiresAt, NotBefore等时间字段
 
 	return claims, nil
 }

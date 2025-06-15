@@ -8,16 +8,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fyerfyer/fyer-manus/go-api/internal/cache"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/config"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/database"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/model"
+	"github.com/fyerfyer/fyer-manus/go-api/testutils"
 )
 
 func TestNewAuthService(t *testing.T) {
 	// 初始化数据库
 	setupAuthServiceDatabase(t)
-	defer database.Close()
 
 	service := NewAuthService()
 	assert.NotNil(t, service, "auth service should not be nil")
@@ -28,7 +27,6 @@ func TestNewAuthService(t *testing.T) {
 func TestAuthService_Register(t *testing.T) {
 	// 初始化数据库
 	setupAuthServiceDatabase(t)
-	defer database.Close()
 
 	service := NewAuthService()
 
@@ -76,7 +74,6 @@ func TestAuthService_Register(t *testing.T) {
 func TestAuthService_Login(t *testing.T) {
 	// 初始化数据库
 	setupAuthServiceDatabase(t)
-	defer database.Close()
 
 	service := NewAuthService()
 
@@ -138,7 +135,6 @@ func TestAuthService_Login(t *testing.T) {
 func TestAuthService_RefreshToken(t *testing.T) {
 	// 初始化数据库
 	setupAuthServiceDatabase(t)
-	defer database.Close()
 
 	service := NewAuthService()
 
@@ -177,7 +173,6 @@ func TestAuthService_RefreshToken(t *testing.T) {
 func TestAuthService_Logout(t *testing.T) {
 	// 初始化数据库
 	setupAuthServiceDatabase(t)
-	defer database.Close()
 
 	service := NewAuthService()
 
@@ -203,7 +198,6 @@ func TestAuthService_Logout(t *testing.T) {
 func TestAuthService_ValidateToken(t *testing.T) {
 	// 初始化数据库
 	setupAuthServiceDatabase(t)
-	defer database.Close()
 
 	service := NewAuthService()
 
@@ -231,7 +225,6 @@ func TestAuthService_ValidateToken(t *testing.T) {
 func TestAuthService_ChangePassword(t *testing.T) {
 	// 初始化数据库
 	setupAuthServiceDatabase(t)
-	defer database.Close()
 
 	service := NewAuthService()
 
@@ -280,7 +273,6 @@ func TestAuthService_ChangePassword(t *testing.T) {
 func TestAuthService_GetUserInfo(t *testing.T) {
 	// 初始化数据库
 	setupAuthServiceDatabase(t)
-	defer database.Close()
 
 	service := NewAuthService()
 
@@ -312,7 +304,6 @@ func TestAuthService_GetUserInfo(t *testing.T) {
 func TestAuthService_UserStatusHandling(t *testing.T) {
 	// 初始化数据库
 	setupAuthServiceDatabase(t)
-	defer database.Close()
 
 	service := NewAuthService()
 
@@ -356,7 +347,6 @@ func TestAuthService_UserStatusHandling(t *testing.T) {
 func TestAuthService_TokenExpiry(t *testing.T) {
 	// 初始化数据库
 	setupAuthServiceDatabase(t)
-	defer database.Close()
 
 	service := NewAuthService()
 
@@ -383,7 +373,6 @@ func TestAuthService_TokenExpiry(t *testing.T) {
 func TestAuthService_DefaultRoleAssignment(t *testing.T) {
 	// 初始化数据库
 	setupAuthServiceDatabase(t)
-	defer database.Close()
 
 	service := NewAuthService()
 
@@ -423,7 +412,6 @@ func TestAuthService_DefaultRoleAssignment(t *testing.T) {
 func TestAuthService_TokenValidation(t *testing.T) {
 	// 初始化数据库
 	setupAuthServiceDatabase(t)
-	defer database.Close()
 
 	service := NewAuthService()
 
@@ -449,23 +437,7 @@ func TestAuthService_TokenValidation(t *testing.T) {
 
 // setupAuthServiceDatabase 设置测试数据库
 func setupAuthServiceDatabase(t *testing.T) {
-	cfg, err := config.LoadForTest()
-	require.NoError(t, err, "failed to load test config")
-
-	err = database.Init(&cfg.Database)
-	require.NoError(t, err, "failed to init database")
-
-	// 自动迁移表结构
-	db := database.Get()
-	require.NoError(t, err, "failed to migrate tables")
-
-	// 清理测试数据
-	db.Exec("TRUNCATE TABLE user_roles CASCADE")
-	db.Exec("TRUNCATE TABLE users CASCADE")
-	db.Exec("TRUNCATE TABLE roles CASCADE")
-
-	err = cache.Init(&cfg.Redis)
-	require.NoError(t, err, "failed to init cache")
+	testutils.SetupTestEnv(t)
 
 	// 设置全局配置（AuthService需要）
 	config.LoadForTest()
@@ -473,16 +445,14 @@ func setupAuthServiceDatabase(t *testing.T) {
 
 // createTestRole 创建测试角色
 func createTestRole(t *testing.T, name, description string, permissions []string) *model.Role {
+	manager := testutils.NewTestDBManager(t)
+	roleID := manager.CreateTestRole(t, name, description, permissions)
+
+	// 获取创建的角色
 	db := database.Get()
+	var role model.Role
+	err := db.First(&role, "id = ?", roleID).Error
+	require.NoError(t, err, "getting created role should succeed")
 
-	role := &model.Role{
-		Name:        name,
-		Description: description,
-		Permissions: permissions,
-	}
-
-	err := db.Create(role).Error
-	require.NoError(t, err, "creating test role should succeed")
-
-	return role
+	return &role
 }

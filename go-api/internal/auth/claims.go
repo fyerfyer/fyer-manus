@@ -34,6 +34,9 @@ func (c *Claims) IsRefreshToken() bool {
 
 // HasRole 检查是否有指定角色
 func (c *Claims) HasRole(role string) bool {
+	if role == "" {
+		return false
+	}
 	for _, r := range c.Roles {
 		if r == role {
 			return true
@@ -44,6 +47,9 @@ func (c *Claims) HasRole(role string) bool {
 
 // HasPermission 检查是否有指定权限
 func (c *Claims) HasPermission(permission string) bool {
+	if permission == "" {
+		return false
+	}
 	for _, p := range c.Permissions {
 		if p == "*" || p == permission {
 			return true

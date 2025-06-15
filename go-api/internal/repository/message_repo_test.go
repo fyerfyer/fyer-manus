@@ -11,16 +11,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fyerfyer/fyer-manus/go-api/internal/config"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/database"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/model"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/types"
+	"github.com/fyerfyer/fyer-manus/go-api/testutils"
 )
 
 func TestNewMessageRepository(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	assert.NotNil(t, repo, "message repository should not be nil")
@@ -29,7 +28,6 @@ func TestNewMessageRepository(t *testing.T) {
 func TestMessageRepository_Create(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -70,7 +68,6 @@ func TestMessageRepository_Create(t *testing.T) {
 func TestMessageRepository_GetByID(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -96,7 +93,6 @@ func TestMessageRepository_GetByID(t *testing.T) {
 func TestMessageRepository_GetBySessionID(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -160,7 +156,6 @@ func TestMessageRepository_GetBySessionID(t *testing.T) {
 func TestMessageRepository_Update(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -191,7 +186,6 @@ func TestMessageRepository_Update(t *testing.T) {
 func TestMessageRepository_Delete(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -213,7 +207,6 @@ func TestMessageRepository_Delete(t *testing.T) {
 func TestMessageRepository_GetConversationContext(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -265,7 +258,6 @@ func TestMessageRepository_GetConversationContext(t *testing.T) {
 func TestMessageRepository_GetMessageChain(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -322,7 +314,6 @@ func TestMessageRepository_GetMessageChain(t *testing.T) {
 func TestMessageRepository_CountBySessionID(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -349,7 +340,6 @@ func TestMessageRepository_CountBySessionID(t *testing.T) {
 func TestMessageRepository_GetLatestBySessionID(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -382,7 +372,6 @@ func TestMessageRepository_GetLatestBySessionID(t *testing.T) {
 func TestMessageRepository_Search(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -590,7 +579,6 @@ func TestMessageRepository_Search(t *testing.T) {
 func TestMessageRepository_DeleteBySessionID(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -623,7 +611,6 @@ func TestMessageRepository_DeleteBySessionID(t *testing.T) {
 func TestMessageRepository_ToolCallHandling(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -684,7 +671,6 @@ func TestMessageRepository_ToolCallHandling(t *testing.T) {
 func TestMessageRepository_Pagination(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -738,7 +724,6 @@ func TestMessageRepository_Pagination(t *testing.T) {
 func TestMessageRepository_ErrorHandling(t *testing.T) {
 	// 初始化数据库
 	setupMessageDatabase(t)
-	defer database.Close()
 
 	repo := NewMessageRepository()
 	ctx := context.Background()
@@ -787,59 +772,35 @@ func TestMessageRepository_ErrorHandling(t *testing.T) {
 
 // setupMessageDatabase 设置测试数据库
 func setupMessageDatabase(t *testing.T) {
-	cfg, err := config.LoadForTest()
-	require.NoError(t, err, "failed to load test config")
-
-	err = database.Init(&cfg.Database)
-	require.NoError(t, err, "failed to init database")
-
-	// 自动迁移表结构
-	db := database.Get()
-
-	// 清理测试数据
-	db.Exec("TRUNCATE TABLE messages CASCADE")
-	db.Exec("TRUNCATE TABLE sessions CASCADE")
-	db.Exec("TRUNCATE TABLE user_roles CASCADE")
-	db.Exec("TRUNCATE TABLE users CASCADE")
-	db.Exec("TRUNCATE TABLE roles CASCADE")
+	testutils.SetupTestEnv(t)
 }
 
 // createTestUserForMessage 创建测试用户
 func createTestUserForMessage(t *testing.T, username, email string) *model.User {
+	manager := testutils.NewTestDBManager(t)
+	userID := manager.CreateTestUser(t, username, email)
+
+	// 获取创建的用户
 	db := database.Get()
+	var user model.User
+	err := db.First(&user, "id = ?", userID).Error
+	require.NoError(t, err, "getting created user should succeed")
 
-	user := &model.User{
-		Username: username,
-		Email:    email,
-		FullName: "Test User",
-		Status:   model.UserStatusActive,
-	}
-
-	err := user.SetPassword("password123")
-	require.NoError(t, err, "setting password should succeed")
-
-	err = db.Create(user).Error
-	require.NoError(t, err, "creating test user should succeed")
-
-	return user
+	return &user
 }
 
 // createTestSessionForMessage 创建测试会话
 func createTestSessionForMessage(t *testing.T, userID uuid.UUID, title string) *model.Session {
+	manager := testutils.NewTestDBManager(t)
+	sessionID := manager.CreateTestSession(t, userID, title)
+
+	// 获取创建的会话
 	db := database.Get()
+	var session model.Session
+	err := db.First(&session, "id = ?", sessionID).Error
+	require.NoError(t, err, "getting created session should succeed")
 
-	session := &model.Session{
-		UserID:       userID,
-		Title:        title,
-		Status:       types.SessionStatusActive,
-		ModelName:    "gpt-3.5-turbo",
-		SystemPrompt: "You are a helpful assistant",
-	}
-
-	err := db.Create(session).Error
-	require.NoError(t, err, "creating test session should succeed")
-
-	return session
+	return &session
 }
 
 // createTestMessage 创建测试消息

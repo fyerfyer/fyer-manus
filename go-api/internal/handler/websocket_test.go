@@ -24,6 +24,7 @@ import (
 )
 
 func TestNewWebSocketHandler(t *testing.T) {
+	setupWebSocketHandlerTestEnv(t)
 	handler := NewWebSocketHandler()
 	assert.NotNil(t, handler, "websocket handler should not be nil")
 	assert.NotNil(t, handler.wsManager, "websocket manager should not be nil")
@@ -32,6 +33,8 @@ func TestNewWebSocketHandler(t *testing.T) {
 }
 
 func TestWebSocketHandler_StartStop(t *testing.T) {
+	setupWebSocketHandlerTestEnv(t)
+
 	handler := NewWebSocketHandler()
 
 	// 启动处理器

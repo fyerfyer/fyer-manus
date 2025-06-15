@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"log"
 	"strings"
 	"testing"
 	"time"
@@ -115,14 +116,23 @@ func TestJWTManager_VerifyToken(t *testing.T) {
 	assert.NoError(t, err, "verifying valid token should succeed")
 	assert.NotNil(t, claims, "claims should not be nil")
 
-	// 测试过期令牌
-	expiredManager := NewJWTManager("test-secret-key-32-characters-long", -time.Hour, 24*time.Hour, "test")
+	// 测试过期令牌 - 修复：使用相同的密钥但设置过期时间
+	cfg, err := config.LoadForTest()
+	require.NoError(t, err, "failed to load config")
+
+	expiredManager := NewJWTManager(
+		cfg.JWT.Secret, // 使用相同的密钥
+		-time.Hour,     // 设置为负数，生成已过期的令牌
+		24*time.Hour,
+		cfg.JWT.Issuer, // 使用相同的发行者
+	)
 	expiredToken, _, err := expiredManager.GenerateTokens(userID, username, email, roles, permissions)
 	require.NoError(t, err, "expired token generation should succeed")
 
+	// 使用原始的manager验证过期令牌
 	_, err = manager.VerifyToken(expiredToken)
 	assert.Error(t, err, "verifying expired token should fail")
-	assert.Contains(t, err.Error(), "token expired", "error should mention token expiry")
+	assert.Contains(t, err.Error(), "expired", "error should mention token expiry")
 
 	// 测试无效令牌
 	_, err = manager.VerifyToken("invalid.token")
@@ -207,6 +217,9 @@ func TestExtractTokenFromHeader(t *testing.T) {
 func TestJWTManager_GenerateToken_Internal(t *testing.T) {
 	manager := createTestJWTManager(t)
 
+	// Add debug logging
+	log.Printf("Manager issuer: %s", manager.issuer)
+
 	userID := uuid.New()
 	username := "testuser"
 	email := "test@example.com"
@@ -226,13 +239,20 @@ func TestJWTManager_GenerateToken_Internal(t *testing.T) {
 	claims, err := manager.ParseToken(accessToken)
 	require.NoError(t, err, "parsing generated token should succeed")
 
+	// Add debug logging
+	log.Printf("Expected issuer: %s, Actual issuer: %s", manager.issuer, claims.Issuer)
+	log.Printf("Token issued at: %v", claims.IssuedAt.Time)
+	log.Printf("Token expires at: %v", claims.ExpiresAt.Time)
+	log.Printf("Token not before: %v", claims.NotBefore.Time)
+	log.Printf("Current time: %v", time.Now())
+
 	assert.Equal(t, TokenTypeAccess, claims.TokenType, "token type should be access")
 	assert.Equal(t, userID, claims.UserID, "user id should match")
 	assert.Equal(t, username, claims.Username, "username should match")
 	assert.Equal(t, email, claims.Email, "email should match")
 	assert.Equal(t, roles, claims.Roles, "roles should match")
 	assert.Equal(t, permissions, claims.Permissions, "permissions should match")
-	assert.Equal(t, "test-issuer", claims.Issuer, "issuer should match")
+	assert.Equal(t, manager.issuer, claims.Issuer, "issuer should match") // Use manager.issuer instead of hardcoded value
 	assert.Equal(t, userID.String(), claims.Subject, "subject should match user id")
 	assert.NotEmpty(t, claims.ID, "jti should not be empty")
 
@@ -244,8 +264,8 @@ func TestJWTManager_GenerateToken_Internal(t *testing.T) {
 }
 
 func TestJWTManager_TokenExpiry(t *testing.T) {
-	// 创建短过期时间的管理器
-	shortExpireManager := NewJWTManager("test-secret-key-32-characters-long", 100*time.Millisecond, time.Hour, "test")
+	// 创建短过期时间的管理器 - 增加过期时间以避免时间精度问题
+	shortExpireManager := NewJWTManager("test-secret-key-32-characters-long", 2*time.Second, time.Hour, "test")
 
 	userID := uuid.New()
 	username := "testuser"
@@ -253,19 +273,46 @@ func TestJWTManager_TokenExpiry(t *testing.T) {
 	roles := []string{"user"}
 	permissions := []string{"read"}
 
+	// Add debug logging
+	log.Printf("Creating token with expire duration: %v", 2*time.Second)
+	tokenStartTime := time.Now()
+
 	// 生成令牌
 	accessToken, _, err := shortExpireManager.GenerateTokens(userID, username, email, roles, permissions)
 	require.NoError(t, err, "token generation should succeed")
 
+	tokenGenTime := time.Now()
+	log.Printf("Token generated at: %v (took %v)", tokenGenTime, tokenGenTime.Sub(tokenStartTime))
+
+	// Parse token to check expiry time
+	claims, err := shortExpireManager.ParseToken(accessToken)
+	require.NoError(t, err, "token parsing should succeed")
+	log.Printf("Token expires at: %v", claims.ExpiresAt.Time)
+	log.Printf("Current time: %v", time.Now())
+	log.Printf("Time until expiry: %v", time.Until(claims.ExpiresAt.Time))
+
 	// 立即验证应该成功
+	verifyStartTime := time.Now()
 	_, err = shortExpireManager.VerifyToken(accessToken)
+	verifyEndTime := time.Now()
+	log.Printf("Verification at: %v (took %v)", verifyEndTime, verifyEndTime.Sub(verifyStartTime))
+
+	if err != nil {
+		log.Printf("Verification error: %v", err)
+	}
 	assert.NoError(t, err, "newly generated token should be valid")
 
-	// 等待令牌过期
-	time.Sleep(200 * time.Millisecond)
+	// 等待令牌过期 - 增加等待时间
+	log.Printf("Waiting for token to expire...")
+	time.Sleep(2500 * time.Millisecond) // 等待 2.5 秒，确保令牌过期
 
 	// 验证过期令牌应该失败
+	expiredVerifyTime := time.Now()
+	log.Printf("Verifying expired token at: %v", expiredVerifyTime)
 	_, err = shortExpireManager.VerifyToken(accessToken)
+	if err != nil {
+		log.Printf("Expected expiry error: %v", err)
+	}
 	assert.Error(t, err, "expired token should fail verification")
 }
 

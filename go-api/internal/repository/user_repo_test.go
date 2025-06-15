@@ -8,15 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fyerfyer/fyer-manus/go-api/internal/config"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/database"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/model"
+	"github.com/fyerfyer/fyer-manus/go-api/testutils"
 )
 
 func TestNewUserRepository(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	assert.NotNil(t, repo, "user repository should not be nil")
@@ -25,7 +24,6 @@ func TestNewUserRepository(t *testing.T) {
 func TestUserRepository_Create(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -65,7 +63,6 @@ func TestUserRepository_Create(t *testing.T) {
 func TestUserRepository_GetByID(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -88,7 +85,6 @@ func TestUserRepository_GetByID(t *testing.T) {
 func TestUserRepository_GetByUsername(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -111,7 +107,6 @@ func TestUserRepository_GetByUsername(t *testing.T) {
 func TestUserRepository_GetByEmail(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -134,7 +129,6 @@ func TestUserRepository_GetByEmail(t *testing.T) {
 func TestUserRepository_Update(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -159,7 +153,6 @@ func TestUserRepository_Update(t *testing.T) {
 func TestUserRepository_Delete(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -179,7 +172,6 @@ func TestUserRepository_Delete(t *testing.T) {
 func TestUserRepository_UpdateLastLogin(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -200,7 +192,6 @@ func TestUserRepository_UpdateLastLogin(t *testing.T) {
 func TestUserRepository_UpdatePassword(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -224,7 +215,6 @@ func TestUserRepository_UpdatePassword(t *testing.T) {
 func TestUserRepository_UpdateStatus(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -245,7 +235,6 @@ func TestUserRepository_UpdateStatus(t *testing.T) {
 func TestUserRepository_ExistsByUsername(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -267,8 +256,6 @@ func TestUserRepository_ExistsByUsername(t *testing.T) {
 func TestUserRepository_ExistsByEmail(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
-
 	repo := NewUserRepository()
 	ctx := context.Background()
 
@@ -289,7 +276,6 @@ func TestUserRepository_ExistsByEmail(t *testing.T) {
 func TestUserRepository_List(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -317,7 +303,6 @@ func TestUserRepository_List(t *testing.T) {
 func TestUserRepository_Search(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -347,7 +332,6 @@ func TestUserRepository_Search(t *testing.T) {
 func TestUserRepository_AssignRole(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -383,7 +367,6 @@ func TestUserRepository_AssignRole(t *testing.T) {
 func TestUserRepository_RemoveRole(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -418,7 +401,6 @@ func TestUserRepository_RemoveRole(t *testing.T) {
 func TestUserRepository_GetUserRoles(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -452,7 +434,6 @@ func TestUserRepository_GetUserRoles(t *testing.T) {
 func TestUserRepository_ErrorHandling(t *testing.T) {
 	// 初始化数据库
 	setupDatabase(t)
-	defer database.Close()
 
 	repo := NewUserRepository()
 	ctx := context.Background()
@@ -487,52 +468,32 @@ func TestUserRepository_ErrorHandling(t *testing.T) {
 
 // setupDatabase 设置测试数据库
 func setupDatabase(t *testing.T) {
-	cfg, err := config.LoadForTest()
-	require.NoError(t, err, "failed to load test config")
-
-	err = database.Init(&cfg.Database)
-	require.NoError(t, err, "failed to init database")
-
-	db := database.Get()
-
-	// 清理测试数据
-	db.Exec("TRUNCATE TABLE user_roles CASCADE")
-	db.Exec("TRUNCATE TABLE users CASCADE")
-	db.Exec("TRUNCATE TABLE roles CASCADE")
+	testutils.SetupTestEnv(t)
 }
 
 // createTestUser 创建测试用户
 func createTestUser(t *testing.T, repo UserRepository, username, email string) *model.User {
+	manager := testutils.NewTestDBManager(t)
+	userID := manager.CreateTestUser(t, username, email)
+
+	// 获取创建的用户
 	ctx := context.Background()
-
-	user := &model.User{
-		Username: username,
-		Email:    email,
-		FullName: "Test User",
-		Status:   model.UserStatusActive,
-	}
-
-	err := user.SetPassword("password123")
-	require.NoError(t, err, "setting password should succeed")
-
-	err = repo.Create(ctx, user)
-	require.NoError(t, err, "creating test user should succeed")
+	user, err := repo.GetByID(ctx, userID)
+	require.NoError(t, err, "getting created user should succeed")
 
 	return user
 }
 
 // createTestRole 创建测试角色
 func createTestRole(t *testing.T, name, description string) *model.Role {
+	manager := testutils.NewTestDBManager(t)
+	roleID := manager.CreateTestRole(t, name, description, []string{"read", "write"})
+
+	// 获取创建的角色
 	db := database.Get()
+	var role model.Role
+	err := db.First(&role, "id = ?", roleID).Error
+	require.NoError(t, err, "getting created role should succeed")
 
-	role := &model.Role{
-		Name:        name,
-		Description: description,
-		Permissions: []string{"read", "write"},
-	}
-
-	err := db.Create(role).Error
-	require.NoError(t, err, "creating test role should succeed")
-
-	return role
+	return &role
 }

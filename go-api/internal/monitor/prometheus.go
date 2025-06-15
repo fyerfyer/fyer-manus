@@ -267,4 +267,11 @@ func (pm *PrometheusManager) ResetMetrics() {
 	dbQueryDuration.Reset()
 	redisOperationsTotal.Reset()
 	messagesTotal.Reset()
+	prometheus.Unregister(tokenGenerationTotal)
+	tokenGenerationTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "token_generation_total",
+			Help: "Total number of JWT tokens generated",
+		},
+	)
 }

@@ -8,15 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fyerfyer/fyer-manus/go-api/internal/config"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/database"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/model"
+	"github.com/fyerfyer/fyer-manus/go-api/testutils"
 )
 
 func TestNewUserService(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	assert.NotNil(t, service, "user service should not be nil")
@@ -26,7 +25,6 @@ func TestNewUserService(t *testing.T) {
 func TestUserService_CreateUser(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -73,7 +71,6 @@ func TestUserService_CreateUser(t *testing.T) {
 func TestUserService_GetUserByID(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -97,7 +94,6 @@ func TestUserService_GetUserByID(t *testing.T) {
 func TestUserService_GetUserByUsername(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -121,7 +117,6 @@ func TestUserService_GetUserByUsername(t *testing.T) {
 func TestUserService_GetUserByEmail(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -145,7 +140,6 @@ func TestUserService_GetUserByEmail(t *testing.T) {
 func TestUserService_UpdateUser(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -184,7 +178,6 @@ func TestUserService_UpdateUser(t *testing.T) {
 func TestUserService_ChangePassword(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -229,7 +222,6 @@ func TestUserService_ChangePassword(t *testing.T) {
 func TestUserService_UpdateUserStatus(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -255,7 +247,6 @@ func TestUserService_UpdateUserStatus(t *testing.T) {
 func TestUserService_DeleteUser(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -280,7 +271,6 @@ func TestUserService_DeleteUser(t *testing.T) {
 func TestUserService_ListUsers(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -319,7 +309,6 @@ func TestUserService_ListUsers(t *testing.T) {
 func TestUserService_SearchUsers(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -365,7 +354,6 @@ func TestUserService_SearchUsers(t *testing.T) {
 func TestUserService_AssignRole(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -402,7 +390,6 @@ func TestUserService_AssignRole(t *testing.T) {
 func TestUserService_RemoveRole(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -442,7 +429,6 @@ func TestUserService_RemoveRole(t *testing.T) {
 func TestUserService_GetUserRoles(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -476,7 +462,6 @@ func TestUserService_GetUserRoles(t *testing.T) {
 func TestUserService_ValidateUser(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -512,7 +497,6 @@ func TestUserService_ValidateUser(t *testing.T) {
 func TestUserService_GetUserStats(t *testing.T) {
 	// 初始化数据库
 	setupUserServiceDatabase(t)
-	defer database.Close()
 
 	service := NewUserService()
 	ctx := context.Background()
@@ -526,55 +510,33 @@ func TestUserService_GetUserStats(t *testing.T) {
 
 // setupUserServiceDatabase 设置测试数据库
 func setupUserServiceDatabase(t *testing.T) {
-	cfg, err := config.LoadForTest()
-	require.NoError(t, err, "failed to load test config")
-
-	err = database.Init(&cfg.Database)
-	require.NoError(t, err, "failed to init database")
-
-	// 自动迁移表结构
-	db := database.Get()
-	err = db.AutoMigrate(&model.User{}, &model.Role{})
-	require.NoError(t, err, "failed to migrate tables")
-
-	// 清理测试数据
-	db.Exec("TRUNCATE TABLE user_roles CASCADE")
-	db.Exec("TRUNCATE TABLE users CASCADE")
-	db.Exec("TRUNCATE TABLE roles CASCADE")
+	testutils.SetupTestEnv(t)
 }
 
 // createTestUserForService 创建测试用户
 func createTestUserForService(t *testing.T, username, email string) *model.User {
+	manager := testutils.NewTestDBManager(t)
+	userID := manager.CreateTestUser(t, username, email)
+
+	// 获取创建的用户
 	db := database.Get()
+	var user model.User
+	err := db.First(&user, "id = ?", userID).Error
+	require.NoError(t, err, "getting created user should succeed")
 
-	user := &model.User{
-		Username: username,
-		Email:    email,
-		FullName: "Test User",
-		Status:   model.UserStatusActive,
-	}
-
-	err := user.SetPassword("password123")
-	require.NoError(t, err, "setting password should succeed")
-
-	err = db.Create(user).Error
-	require.NoError(t, err, "creating test user should succeed")
-
-	return user
+	return &user
 }
 
 // createTestRoleForService 创建测试角色
 func createTestRoleForService(t *testing.T, name, description string) *model.Role {
+	manager := testutils.NewTestDBManager(t)
+	roleID := manager.CreateTestRole(t, name, description, []string{"read", "write"})
+
+	// 获取创建的角色
 	db := database.Get()
+	var role model.Role
+	err := db.First(&role, "id = ?", roleID).Error
+	require.NoError(t, err, "getting created role should succeed")
 
-	role := &model.Role{
-		Name:        name,
-		Description: description,
-		Permissions: []string{"read", "write"},
-	}
-
-	err := db.Create(role).Error
-	require.NoError(t, err, "creating test role should succeed")
-
-	return role
+	return &role
 }

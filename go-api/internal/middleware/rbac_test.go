@@ -7,12 +7,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/fyerfyer/fyer-manus/go-api/internal/auth"
-	"github.com/fyerfyer/fyer-manus/go-api/internal/config"
-	"github.com/fyerfyer/fyer-manus/go-api/internal/database"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/model"
+	"github.com/fyerfyer/fyer-manus/go-api/testutils"
 	"github.com/google/uuid"
 )
 
@@ -656,19 +654,7 @@ func TestContainsPath(t *testing.T) {
 
 // setupRBACTestEnv 设置RBAC测试环境
 func setupRBACTestEnv(t *testing.T) {
-	cfg, err := config.LoadForTest()
-	require.NoError(t, err, "failed to load test config")
-
-	err = database.Init(&cfg.Database)
-	require.NoError(t, err, "failed to init database")
-
-	// 自动迁移表结构
-	db := database.Get()
-
-	// 清理测试数据
-	db.Exec("TRUNCATE TABLE user_roles CASCADE")
-	db.Exec("TRUNCATE TABLE users CASCADE")
-	db.Exec("TRUNCATE TABLE roles CASCADE")
+	_ = testutils.SetupTestEnv(t)
 }
 
 // createTestClaims 创建测试claims

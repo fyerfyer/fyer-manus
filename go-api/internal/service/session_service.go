@@ -32,28 +32,57 @@ func NewSessionService() *SessionService {
 
 // CreateSession 创建会话
 func (s *SessionService) CreateSession(ctx context.Context, userID uuid.UUID, req model.SessionCreateRequest) (*model.SessionResponse, error) {
+	logger.Info("creating session",
+		zap.String("user_id", userID.String()),
+		zap.String("title", req.Title),
+		zap.String("model_name", req.ModelName),
+	)
+
 	// 检查用户是否存在
+	logger.Debug("checking if user exists", zap.String("user_id", userID.String()))
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			logger.Warn("user not found during session creation", zap.String("user_id", userID.String()))
 			return nil, errors.New("user not found")
 		}
-		logger.Error("failed to get user", zap.Error(err))
+		logger.Error("failed to get user", zap.Error(err), zap.String("user_id", userID.String()))
 		return nil, errors.New("internal server error")
 	}
 
+	logger.Debug("user found, checking if active",
+		zap.String("user_id", userID.String()),
+		zap.String("user_status", string(user.Status)),
+	)
+
 	if !user.IsActive() {
+		logger.Warn("inactive user attempted to create session",
+			zap.String("user_id", userID.String()),
+			zap.String("user_status", string(user.Status)),
+		)
 		return nil, errors.New("user is not active")
 	}
 
 	// 检查用户活跃会话数量限制
+	logger.Debug("checking active sessions count", zap.String("user_id", userID.String()))
 	activeCount, err := s.sessionRepo.GetActiveSessionsCount(ctx, userID)
 	if err != nil {
-		logger.Error("failed to get active sessions count", zap.Error(err))
+		logger.Error("failed to get active sessions count", zap.Error(err), zap.String("user_id", userID.String()))
 		return nil, errors.New("internal server error")
 	}
 
+	logger.Debug("active sessions count retrieved",
+		zap.String("user_id", userID.String()),
+		zap.Int64("active_count", activeCount),
+		zap.Int("max_allowed", types.MaxSessionsPerUser),
+	)
+
 	if activeCount >= types.MaxSessionsPerUser {
+		logger.Warn("user exceeded maximum sessions limit",
+			zap.String("user_id", userID.String()),
+			zap.Int64("active_count", activeCount),
+			zap.Int("max_allowed", types.MaxSessionsPerUser),
+		)
 		return nil, fmt.Errorf("maximum sessions limit reached (%d)", types.MaxSessionsPerUser)
 	}
 
@@ -69,16 +98,26 @@ func (s *SessionService) CreateSession(ctx context.Context, userID uuid.UUID, re
 
 	if session.Title == "" {
 		session.Title = types.DefaultSessionTitle
+		logger.Debug("using default session title", zap.String("title", session.Title))
 	}
 
+	logger.Debug("attempting to create session in database",
+		zap.String("user_id", userID.String()),
+		zap.String("title", session.Title),
+	)
+
 	if err := s.sessionRepo.Create(ctx, session); err != nil {
-		logger.Error("failed to create session", zap.Error(err))
+		logger.Error("failed to create session in database",
+			zap.Error(err),
+			zap.String("user_id", userID.String()),
+		)
 		return nil, errors.New("failed to create session")
 	}
 
 	logger.Info("session created successfully",
 		zap.String("session_id", session.ID.String()),
 		zap.String("user_id", userID.String()),
+		zap.String("title", session.Title),
 	)
 
 	response := session.ToResponse()

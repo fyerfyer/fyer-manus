@@ -96,6 +96,7 @@ func (hc *HealthChecker) Check(ctx context.Context) OverallHealth {
 
 	results := make(map[string]ComponentHealth)
 	var wg sync.WaitGroup
+	var resultsMutex sync.Mutex // 添加互斥锁，保证并发安全
 
 	// 并发执行健康检查
 	for name, checkFunc := range components {
@@ -105,7 +106,9 @@ func (hc *HealthChecker) Check(ctx context.Context) OverallHealth {
 
 			// 检查缓存
 			if cached := hc.getCachedHealth(n); cached != nil {
+				resultsMutex.Lock()
 				results[n] = *cached
+				resultsMutex.Unlock()
 				return
 			}
 
@@ -114,7 +117,10 @@ func (hc *HealthChecker) Check(ctx context.Context) OverallHealth {
 			defer cancel()
 
 			health := cf(checkCtx)
+
+			resultsMutex.Lock()
 			results[n] = health
+			resultsMutex.Unlock()
 
 			// 更新缓存
 			hc.setCachedHealth(n, health)

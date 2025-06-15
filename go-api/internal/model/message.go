@@ -86,7 +86,7 @@ func (m *Message) HasToolCalls() bool {
 type MessageCreateRequest struct {
 	Role        types.MessageRole      `json:"role" binding:"required,oneof=user assistant system tool"`
 	Content     string                 `json:"content" binding:"required,max=50000"`
-	ContentType types.MessageType      `json:"content_type" binding:"oneof=text image file code"`
+	ContentType types.MessageType      `json:"content_type" binding:"omitempty,oneof=text image file code"`
 	ParentID    *uuid.UUID             `json:"parent_id"`
 	Metadata    map[string]interface{} `json:"metadata"`
 }

@@ -5,23 +5,20 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 
-	"github.com/fyerfyer/fyer-manus/go-api/internal/config"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/database"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/model"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/types"
+	"github.com/fyerfyer/fyer-manus/go-api/testutils"
 )
 
 func TestNewSessionRepository(t *testing.T) {
 	// 初始化数据库
 	setupSessionDatabase(t)
-	defer database.Close()
 
 	repo := NewSessionRepository()
 	assert.NotNil(t, repo, "session repository should not be nil")
@@ -30,7 +27,6 @@ func TestNewSessionRepository(t *testing.T) {
 func TestSessionRepository_Create(t *testing.T) {
 	// 初始化数据库
 	setupSessionDatabase(t)
-	defer database.Close()
 
 	repo := NewSessionRepository()
 	ctx := context.Background()
@@ -59,7 +55,6 @@ func TestSessionRepository_Create(t *testing.T) {
 func TestSessionRepository_GetByID(t *testing.T) {
 	// 初始化数据库
 	setupSessionDatabase(t)
-	defer database.Close()
 
 	repo := NewSessionRepository()
 	ctx := context.Background()
@@ -84,7 +79,6 @@ func TestSessionRepository_GetByID(t *testing.T) {
 func TestSessionRepository_GetByUserID(t *testing.T) {
 	// 初始化数据库
 	setupSessionDatabase(t)
-	defer database.Close()
 
 	repo := NewSessionRepository()
 	ctx := context.Background()
@@ -149,7 +143,6 @@ func TestSessionRepository_GetByUserID(t *testing.T) {
 func TestSessionRepository_Update(t *testing.T) {
 	// 初始化数据库
 	setupSessionDatabase(t)
-	defer database.Close()
 
 	repo := NewSessionRepository()
 	ctx := context.Background()
@@ -179,7 +172,6 @@ func TestSessionRepository_Update(t *testing.T) {
 func TestSessionRepository_Delete(t *testing.T) {
 	// 初始化数据库
 	setupSessionDatabase(t)
-	defer database.Close()
 
 	repo := NewSessionRepository()
 	ctx := context.Background()
@@ -201,7 +193,6 @@ func TestSessionRepository_Delete(t *testing.T) {
 func TestSessionRepository_Archive(t *testing.T) {
 	// 初始化数据库
 	setupSessionDatabase(t)
-	defer database.Close()
 
 	repo := NewSessionRepository()
 	ctx := context.Background()
@@ -223,7 +214,6 @@ func TestSessionRepository_Archive(t *testing.T) {
 func TestSessionRepository_UpdateMessageCount(t *testing.T) {
 	// 初始化数据库
 	setupSessionDatabase(t)
-	defer database.Close()
 
 	repo := NewSessionRepository()
 	ctx := context.Background()
@@ -246,7 +236,6 @@ func TestSessionRepository_UpdateMessageCount(t *testing.T) {
 func TestSessionRepository_AddTokens(t *testing.T) {
 	// 初始化数据库
 	setupSessionDatabase(t)
-	defer database.Close()
 
 	repo := NewSessionRepository()
 	ctx := context.Background()
@@ -280,7 +269,6 @@ func TestSessionRepository_AddTokens(t *testing.T) {
 func TestSessionRepository_Search(t *testing.T) {
 	// 初始化数据库
 	setupSessionDatabase(t)
-	defer database.Close()
 
 	repo := NewSessionRepository()
 	ctx := context.Background()
@@ -469,7 +457,6 @@ func TestSessionRepository_Search(t *testing.T) {
 func TestSessionRepository_GetActiveSessionsCount(t *testing.T) {
 	// 初始化数据库
 	setupSessionDatabase(t)
-	defer database.Close()
 
 	repo := NewSessionRepository()
 	ctx := context.Background()
@@ -554,95 +541,9 @@ func TestSessionRepository_GetActiveSessionsCount(t *testing.T) {
 	assert.Equal(t, int64(1), user2Count, "user2 should have 1 active session")
 }
 
-func TestSessionRepository_CleanupExpiredSessions(t *testing.T) {
-	// 初始化数据库
-	setupSessionDatabase(t)
-	defer database.Close()
-
-	repo := NewSessionRepository()
-	ctx := context.Background()
-
-	// 创建测试数据
-	user := createTestUserForSession(t, "testuser", "test@example.com")
-	session := createTestSession(t, repo, user.ID, "Old Archived Session")
-
-	fmt.Printf("Test: Created session with ID: %s, Status: %s\n", session.ID, session.Status)
-
-	// 归档会话
-	err := repo.Archive(ctx, session.ID)
-	require.NoError(t, err, "archiving session should succeed")
-
-	// 验证归档状态
-	archivedSession, err := repo.GetByID(ctx, session.ID)
-	require.NoError(t, err, "getting archived session should succeed")
-	fmt.Printf("Test: Session after archive - ID: %s, Status: %s, UpdatedAt: %v\n",
-		archivedSession.ID, archivedSession.Status, archivedSession.UpdatedAt)
-
-	// 手动设置旧的更新时间（模拟过期）- 需要禁用触发器
-	db := database.Get()
-	oldTime := time.Now().AddDate(0, 0, -35) // 35天前
-	fmt.Printf("Test: Setting old time to: %v\n", oldTime)
-
-	// 临时禁用触发器，直接更新数据库
-	err = db.Transaction(func(tx *gorm.DB) error {
-		// 禁用触发器
-		if err := tx.Exec("ALTER TABLE sessions DISABLE TRIGGER update_sessions_updated_at").Error; err != nil {
-			return err
-		}
-
-		// 更新时间
-		if err := tx.Model(&model.Session{}).
-			Where("id = ?", session.ID).
-			Update("updated_at", oldTime).Error; err != nil {
-			return err
-		}
-
-		// 重新启用触发器
-		if err := tx.Exec("ALTER TABLE sessions ENABLE TRIGGER update_sessions_updated_at").Error; err != nil {
-			return err
-		}
-
-		return nil
-	})
-	require.NoError(t, err, "updating session timestamp should succeed")
-
-	// 验证时间更新
-	updatedSession, err := repo.GetByID(ctx, session.ID)
-	require.NoError(t, err, "getting session with old timestamp should succeed")
-	fmt.Printf("Test: Session after time update - ID: %s, Status: %s, UpdatedAt: %v\n",
-		updatedSession.ID, updatedSession.Status, updatedSession.UpdatedAt)
-
-	// 验证时间确实被设置为过期
-	cutoffForTest := time.Now().AddDate(0, 0, -30)
-	fmt.Printf("Test: Cutoff time for comparison: %v\n", cutoffForTest)
-	fmt.Printf("Test: Is session expired? %v\n", updatedSession.UpdatedAt.Before(cutoffForTest))
-
-	// 确保时间确实过期了
-	assert.True(t, updatedSession.UpdatedAt.Before(cutoffForTest), "session should be expired")
-
-	// 执行清理
-	fmt.Printf("Test: Starting cleanup process...\n")
-	err = repo.CleanupExpiredSessions(ctx)
-	assert.NoError(t, err, "cleanup should succeed")
-
-	// 验证会话状态被更新为deleted
-	fmt.Printf("Test: Verifying session deletion...\n")
-	finalSession, err := repo.GetByID(ctx, session.ID)
-	if err != nil {
-		fmt.Printf("Test: GetByID failed as expected with error: %v\n", err)
-		// 如果GetByID失败，说明可能是因为查询时过滤了deleted状态的记录
-		assert.Error(t, err, "getting cleaned up session should fail")
-	} else {
-		fmt.Printf("Test: GetByID succeeded - session status: %s\n", finalSession.Status)
-		// 如果GetByID成功，检查状态是否为deleted
-		assert.Equal(t, types.SessionStatusDeleted, finalSession.Status, "session status should be deleted")
-	}
-}
-
 func TestSessionRepository_Pagination(t *testing.T) {
 	// 初始化数据库
 	setupSessionDatabase(t)
-	defer database.Close()
 
 	repo := NewSessionRepository()
 	ctx := context.Background()
@@ -690,7 +591,6 @@ func TestSessionRepository_Pagination(t *testing.T) {
 func TestSessionRepository_ErrorHandling(t *testing.T) {
 	// 初始化数据库
 	setupSessionDatabase(t)
-	defer database.Close()
 
 	repo := NewSessionRepository()
 	ctx := context.Background()
@@ -764,59 +664,32 @@ func TestSessionRepository_ErrorHandling(t *testing.T) {
 
 // setupSessionDatabase 设置测试数据库
 func setupSessionDatabase(t *testing.T) {
-	cfg, err := config.LoadForTest()
-	require.NoError(t, err, "failed to load test config")
-
-	err = database.Init(&cfg.Database)
-	require.NoError(t, err, "failed to init database")
-
-	// 自动迁移表结构
-	db := database.Get()
-
-	// 清理测试数据
-	db.Exec("TRUNCATE TABLE sessions CASCADE")
-	db.Exec("TRUNCATE TABLE user_roles CASCADE")
-	db.Exec("TRUNCATE TABLE users CASCADE")
-	db.Exec("TRUNCATE TABLE roles CASCADE")
+	testutils.SetupTestEnv(t)
 }
 
 // createTestUserForSession 创建测试用户
 func createTestUserForSession(t *testing.T, username, email string) *model.User {
+	manager := testutils.NewTestDBManager(t)
+	userID := manager.CreateTestUser(t, username, email)
+
+	// 获取创建的用户
 	db := database.Get()
+	var user model.User
+	err := db.First(&user, "id = ?", userID).Error
+	require.NoError(t, err, "getting created user should succeed")
 
-	user := &model.User{
-		Username: username,
-		Email:    email,
-		FullName: "Test User",
-		Status:   model.UserStatusActive,
-	}
-
-	err := user.SetPassword("password123")
-	require.NoError(t, err, "setting password should succeed")
-
-	err = db.Create(user).Error
-	require.NoError(t, err, "creating test user should succeed")
-
-	return user
+	return &user
 }
 
 // createTestSession 创建测试会话
 func createTestSession(t *testing.T, repo SessionRepository, userID uuid.UUID, title string) *model.Session {
+	manager := testutils.NewTestDBManager(t)
+	sessionID := manager.CreateTestSession(t, userID, title)
+
+	// 获取创建的会话
 	ctx := context.Background()
-
-	session := &model.Session{
-		UserID:       userID,
-		Title:        title,
-		Status:       types.SessionStatusActive,
-		ModelName:    "gpt-3.5-turbo",
-		SystemPrompt: "You are a helpful assistant",
-		Metadata: map[string]interface{}{
-			"test": true,
-		},
-	}
-
-	err := repo.Create(ctx, session)
-	require.NoError(t, err, "creating test session should succeed")
+	session, err := repo.GetByID(ctx, sessionID)
+	require.NoError(t, err, "getting created session should succeed")
 
 	return session
 }

@@ -9,12 +9,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
-	"github.com/fyerfyer/fyer-manus/go-api/internal/cache"
-	"github.com/fyerfyer/fyer-manus/go-api/internal/config"
-	"github.com/fyerfyer/fyer-manus/go-api/internal/database"
 	"github.com/fyerfyer/fyer-manus/go-api/internal/monitor"
+	"github.com/fyerfyer/fyer-manus/go-api/testutils"
 )
 
 func TestHealth(t *testing.T) {
@@ -369,20 +366,7 @@ func TestHealthEndpointWithDifferentMethods(t *testing.T) {
 
 // setupHealthHandlerTestEnv 设置健康检查处理器测试环境
 func setupHealthHandlerTestEnv(t *testing.T) {
-	cfg, err := config.LoadForTest()
-	require.NoError(t, err, "failed to load test config")
-
-	// 初始化数据库连接（如果可能）
-	err = database.Init(&cfg.Database)
-	if err != nil {
-		t.Logf("Warning: failed to init database for health handler test: %v", err)
-	}
-
-	// 初始化Redis连接（如果可能）
-	err = cache.Init(&cfg.Redis)
-	if err != nil {
-		t.Logf("Warning: failed to init cache for health handler test: %v", err)
-	}
+	testutils.SetupTestEnv(t)
 
 	// 确保健康检查器已初始化
 	if healthChecker == nil {
